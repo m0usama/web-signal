@@ -8,6 +8,7 @@ import type { Message, Profile, Reaction, SignalMode } from "@/lib/types";
 import type { PartnerPresence, Room } from "@/lib/useRoom";
 import { Icon } from "./Icon";
 import { TalkButton, VoiceNote } from "./Voice";
+import { SpideyCam } from "./SpideyCam";
 
 const REACTIONS = ["💜", "😂", "😮", "🥺", "🔥", "👍"];
 const QUICK_EMOJI = ["💜", "🕸️", "⚡", "🌙", "✨", "😘", "🥹", "😂", "🫶", "🦇", "🌃", "☕"];
@@ -32,6 +33,7 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
   const [picker, setPicker] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cam, setCam] = useState(false);
   const stick = useRef(true);
   const { messages, reactions, partnerLastReadAt, actions } = room;
 
@@ -238,6 +240,9 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
           >
             ★
           </button>
+          <button type="button" className="btn btn-sq btn-coral cam-open" onClick={() => setCam(true)} aria-label="Open Spidey-Cam">
+            📸
+          </button>
           <button type="button" className="btn btn-sq btn-orange" onClick={() => fileRef.current?.click()} aria-label="Send a photo or GIF">
             ⬚
           </button>
@@ -287,6 +292,23 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
           )}
         </div>
       </div>
+
+      {cam && (
+        <SpideyCam
+          partnerName={partner.display_name}
+          onClose={() => setCam(false)}
+          onSend={async (file, sendMode) => {
+            try {
+              await actions.sendMedia(file, sendMode, 10);
+              onSent();
+              onToast(sendMode === "ghost" ? "SNAP SENT 👻" : "SNAP SENT", "info");
+            } catch (e) {
+              onToast(friendlyError(e), "warn");
+              throw e;
+            }
+          }}
+        />
+      )}
 
       {lightbox && (
         <div className="lightbox" role="dialog" aria-label="Photo" onClick={() => setLightbox(null)}>
