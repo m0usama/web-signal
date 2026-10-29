@@ -21,9 +21,9 @@ export async function login(page: Page, email: string) {
 /** Gets past the intro and the sound prompt. */
 export async function enterApp(page: Page) {
   const skip = page.getByRole("button", { name: /SKIP/ });
-  if (await skip.isVisible({ timeout: 4000 }).catch(() => false)) await skip.click();
+  if (await skip.waitFor({ timeout: 4000 }).then(() => true, () => false)) await skip.click();
   const notNow = page.getByRole("button", { name: "NOT NOW" });
-  if (await notNow.isVisible({ timeout: 2000 }).catch(() => false)) await notNow.click();
+  if (await notNow.waitFor({ timeout: 4000 }).then(() => true, () => false)) await notNow.click();
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
   await expect(page.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
 }

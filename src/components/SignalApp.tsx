@@ -391,7 +391,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   const newDrops = room.drops.filter((d) => d.sender_id !== boot.me.id && !d.opened_at).length;
 
   return (
-    <div className={`app-shell ${night ? "theme-night" : "theme-day"} ${reduced ? "reduced" : ""} tab-${tab} ${flash ? "flash" : ""}`}>
+    <div className={`app-shell ${night ? "theme-night" : "theme-day"} ${reduced ? "reduced" : ""} tab-${tab} ${flash ? "flash" : ""} ${introDone && soundPrompt && !soundUnlocked ? "has-sound-prompt" : ""}`}>
       <div className="crt" aria-hidden />
 
       <Header

@@ -1645,7 +1645,7 @@ select.mode-chip {
 .sound-prompt {
   position: fixed;
   left: 50%;
-  bottom: calc(90px + var(--safe-b));
+  top: calc(70px + var(--safe-t));
   z-index: 45;
   display: grid;
   justify-items: center;
@@ -1665,6 +1665,7 @@ select.mode-chip {
 .toasts {
   position: fixed;
   top: calc(70px + var(--safe-t));
+  transition: top 200ms;
   left: 50%;
   z-index: 60;
   display: grid;
@@ -2273,4 +2274,9 @@ select.mode-chip {
 
 .reduced .eq i {
   animation-duration: 1.2s;
+}
+
+/* While the sound prompt is up, toasts stack below it. */
+.has-sound-prompt .toasts {
+  top: calc(220px + var(--safe-t));
 }
