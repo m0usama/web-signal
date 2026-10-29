@@ -1,4 +1,4 @@
-// Creates the two test accounts in a LOCAL Supabase (used by CI).
+// Creates the test accounts in a LOCAL Supabase (used by CI).
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -8,7 +8,7 @@ if (!url?.includes("127.0.0.1") && !url?.includes("localhost")) {
   process.exit(1);
 }
 const admin = createClient(url, key, { auth: { persistSession: false } });
-for (const name of ["nova", "night", "stranger"]) {
+for (const name of ["nova", "night", "stranger", "robo"]) {
   const email = `${name}@web-signal.local`;
   const { error } = await admin.auth.admin.createUser({ email, password: "test-password-123", email_confirm: true });
   if (error && !/already/i.test(error.message)) throw error;

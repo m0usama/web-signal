@@ -351,5 +351,69 @@ select t.throws($$select public.ttt_new((select v::uuid from ctx where k='room')
 select t.throws($$select public.set_countdown((select v::uuid from ctx where k='room'), now(), 'x')$$, 'NOT_FOUND', 'outsider cannot set the countdown');
 reset role;
 
+-- ================================================================== extra rooms + auto-replies
+select t.as_user(null);
+select t.ok((select public.add_person('stranger@example.com', 'Bot', 'c') = 'cccccccc-0000-0000-0000-000000000003'), 'owner can add a third person');
+insert into ctx values ('room2', public.link_room('nova@example.com', 'stranger@example.com')::text);
+select t.ok((select public.link_room('nova@example.com', 'stranger@example.com')::text = (select v from ctx where k = 'room2')), 'linking twice returns the same room');
+select t.ok((select (select v from ctx where k = 'room2') <> (select v from ctx where k = 'room')), 'the new pair gets its own room');
+select t.ok((select count(*) = 2 from public.room_members where room_id = (select v::uuid from ctx where k = 'room2')), 'second room has two members');
+select public.set_auto_reply('stranger@example.com', 'nova@example.com', array['beep one', 'beep two']);
+
+set local role authenticated;
+select t.throws($$select public.add_person('x@example.com','x','c')$$, 'permission denied', 'people cannot add accounts');
+select t.throws($$select public.link_room('nova@example.com','night@example.com')$$, 'permission denied', 'people cannot link rooms');
+select t.throws($$select public.set_auto_reply('nova@example.com','night@example.com', array['x'])$$, 'permission denied', 'people cannot set auto-replies');
+select t.throws($$select * from private.auto_replies$$, 'permission denied', 'auto-reply settings are private');
+reset role;
+
+-- the bot (stranger) only sees its own room
+select t.as_user('cccccccc-0000-0000-0000-000000000003');
+set local role authenticated;
+select t.ok((select count(*) = 1 from public.private_rooms), 'bot sees only its own room');
+select t.ok((select count(*) = 0 from public.messages where room_id = (select v::uuid from ctx where k = 'room')), 'bot cannot read the main room');
+select t.ok((select count(*) = 0 from public.profiles where id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'bot cannot see the other partner''s profile');
+select t.throws($$insert into public.messages (room_id, client_id, kind, body, mode)
+  values ((select v::uuid from ctx where k='room'), gen_random_uuid(), 'text', 'hi', 'normal')$$, 'row-level security', 'bot cannot post in the main room');
+reset role;
+
+-- night still cannot see the new room
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+select t.ok((select count(*) = 1 from public.private_rooms), 'partner B still sees only the main room');
+select t.ok((select count(*) = 0 from public.profiles where id = 'cccccccc-0000-0000-0000-000000000003'), 'partner B cannot see the bot');
+reset role;
+
+-- nova talks to the bot and gets one reply per burst
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+select t.ok((select count(*) = 2 from public.private_rooms), 'A sees both of their rooms');
+insert into public.messages (room_id, client_id, kind, body, mode)
+values ((select v::uuid from ctx where k = 'room2'), gen_random_uuid(), 'text', 'hello bot', 'normal');
+select t.ok((select count(*) = 1 from public.messages where room_id = (select v::uuid from ctx where k = 'room2')
+  and sender_id = 'cccccccc-0000-0000-0000-000000000003' and body = 'beep one'), 'bot auto-replies to A');
+select t.ok((select (select created_at from public.messages where body = 'beep one') > (select created_at from public.messages where body = 'hello bot')),
+  'reply is timestamped after the message');
+insert into public.messages (room_id, client_id, kind, body, mode)
+values ((select v::uuid from ctx where k = 'room2'), gen_random_uuid(), 'text', 'again', 'normal');
+select t.ok((select count(*) = 1 from public.messages where sender_id = 'cccccccc-0000-0000-0000-000000000003'), 'one reply per burst');
+select t.ok((select count(*) = 0 from public.messages where room_id = (select v::uuid from ctx where k = 'room')
+  and sender_id = 'cccccccc-0000-0000-0000-000000000003'), 'no replies in rooms the bot is not in');
+reset role;
+
+-- the bot's own messages never trigger replies, and B gets none
+select t.as_user('cccccccc-0000-0000-0000-000000000003');
+set local role authenticated;
+insert into public.messages (room_id, client_id, kind, body, mode)
+values ((select v::uuid from ctx where k = 'room2'), gen_random_uuid(), 'text', 'manual', 'normal');
+select t.ok((select sender_id = auth.uid() from public.messages where body = 'manual'), 'people still cannot fake the sender');
+reset role;
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+insert into public.messages (room_id, client_id, kind, body, mode)
+values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'only for nova', 'normal');
+reset role;
+select t.ok((select count(*) = 2 from public.messages where sender_id = 'cccccccc-0000-0000-0000-000000000003'), 'bot only answers the chosen person');
+
 rollback;
 \echo 'ALL DATABASE SECURITY TESTS PASSED'

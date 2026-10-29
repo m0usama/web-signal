@@ -5,7 +5,7 @@ import type { Building } from "@/lib/city";
 import { friendlyError } from "@/lib/messages";
 import { BADGES, POKES } from "@/lib/pixels";
 import { synth } from "@/lib/sound";
-import type { Bootstrap, Message, PokeKind, SignalDrop, Tab } from "@/lib/types";
+import type { Bootstrap, Contact, Message, PokeKind, SignalDrop, Tab } from "@/lib/types";
 import { useRoom, type Room } from "@/lib/useRoom";
 import { CityMap, type Bubble, type Flight, type MapMode } from "./CityMap";
 import { Comms } from "./Comms";
@@ -25,6 +25,7 @@ import { Equaliser, TuneButton, type TuneStatus } from "./TuneButton";
 import { playTuneOnce } from "@/lib/tune";
 import { primeRadio } from "@/lib/radio";
 import { registerServiceWorker } from "@/lib/push-client";
+import { ContactBar } from "./ContactBar";
 
 const INTRO_KEY = "ws-intro-seen";
 const SOUND_PROMPT_KEY = "ws-sound-prompt";
@@ -65,8 +66,16 @@ function useHour() {
   return hour;
 }
 
-export function SignalApp({ boot }: { boot: Bootstrap }) {
-  const [tab, setTab] = useState<Tab>("map");
+export function SignalApp({
+  boot,
+  contacts = [],
+  onSwitch,
+}: {
+  boot: Bootstrap;
+  contacts?: Contact[];
+  onSwitch?: (roomId: string, tab: Tab) => void;
+}) {
+  const [tab, setTab] = useState<Tab>(boot.initialTab ?? "map");
   // This component only renders in the browser (see ClientApp), so storage is safe to read here.
   const [introDone, setIntroDone] = useState(() => readSession(INTRO_KEY));
   const [soundPrompt, setSoundPrompt] = useState(() => !readSession(SOUND_PROMPT_KEY));
@@ -394,7 +403,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
     tuneTimer.current = setTimeout(() => {
       setTuneOut(null);
       // Let them know with a notification instead.
-      void fetch("/api/push/tune", { method: "POST" }).catch(() => {});
+      void fetch("/api/push/tune", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ room_id: boot.roomId }) }).catch(() => {});
       toast({
         text: room.presence.online
           ? "NO ANSWER — SENT THEM A NOTIFICATION INSTEAD"
@@ -447,7 +456,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
       <Header
         me={room.me}
         partner={room.partner}
-        partnerOnline={room.presence.online}
+        partnerOnline={room.partnerInApp}
         connection={room.connection}
         unread={tab === "comms" ? 0 : room.unread}
         soundOn={soundUnlocked && room.settings.sound_on}
@@ -468,7 +477,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
           <CityMap
             me={room.me}
             partner={room.partner}
-            partnerOnline={room.presence.online}
+            partnerOnline={room.partnerInApp}
             partnerTyping={room.presence.typing}
             partnerView={room.presence.view}
             drops={room.drops}
@@ -513,6 +522,9 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
 
         {tab !== "map" && (
           <div className="panel" key={tab}>
+            {tab === "comms" && contacts.length > 1 && (
+              <ContactBar contacts={contacts} activeRoomId={boot.roomId} onPick={(id) => onSwitch?.(id, "comms")} />
+            )}
             {tab === "comms" && (
               <Comms
                 room={room}

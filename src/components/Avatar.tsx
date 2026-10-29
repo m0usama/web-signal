@@ -7,7 +7,7 @@ import { PixelArt } from "./PixelArt";
 
 /**
  * Shows the portrait in /public/avatars/<key>.png
- * (a = SpiderZiya, b = Spidey), falling back to a pixel placeholder.
+ * (a = SpiderZiya, b = Spidey, c = J.A.R.V.I.S), falling back to a pixel placeholder.
  */
 export function Avatar({ avatarKey, size, label }: { avatarKey: AvatarKey; size: number; label?: string }) {
   const [custom, setCustom] = useState<"loading" | "ok" | "missing">("loading");

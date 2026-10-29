@@ -1,4 +1,4 @@
-export type AvatarKey = "a" | "b";
+export type AvatarKey = "a" | "b" | "c";
 export type SignalMode = "normal" | "day" | "ghost";
 export type MessageKind = "text" | "image" | "gif" | "sticker" | "voice";
 export type PokeKind = "heart" | "spider" | "zap" | "star" | "hug" | "web" | "fingerheart";
@@ -14,6 +14,7 @@ export interface Profile {
   map_x: number;
   map_y: number;
   last_seen_at: string | null;
+  foreground?: boolean;
   mood?: Mood | null;
   mood_at?: string | null;
 }
@@ -117,6 +118,15 @@ export interface RoomMember {
   last_read_at: string;
 }
 
+/** One private room = one person you can talk to. */
+export interface Contact {
+  roomId: string;
+  roomCreatedAt: string;
+  countdown?: Countdown;
+  partner: Profile;
+  unread: number;
+}
+
 export interface Bootstrap {
   roomId: string;
   roomCreatedAt: string;
@@ -125,4 +135,8 @@ export interface Bootstrap {
   partner: Profile;
   settings: Settings;
   members: RoomMember[];
+  /** Everyone you share a room with (the current one included). */
+  contacts?: Contact[];
+  /** Screen to open on (kept when switching between people). */
+  initialTab?: Tab;
 }

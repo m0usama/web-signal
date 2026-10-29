@@ -57,11 +57,15 @@ jobs:
       - name: Production build
         run: scripts/ci-run.sh build npm run build
 
-      - name: Seed two test accounts and pair them
+      - name: Seed test accounts, pair them and add a test bot
         run: |
           node tests/e2e/seed.mjs
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
-            -c "select public.setup_pair('nova@web-signal.local','Nova','night@web-signal.local','Night');"
+            -c "select public.setup_pair('nova@web-signal.local','Nova','night@web-signal.local','Night');" \
+            -c "select public.add_person('robo@web-signal.local','R.O.B.O','c');" \
+            -c "select public.link_room('nova@web-signal.local','robo@web-signal.local');" \
+            -c "select public.link_room('night@web-signal.local','robo@web-signal.local');" \
+            -c "select public.set_auto_reply('robo@web-signal.local','night@web-signal.local', array['beep boop, just a robot here 🤖','still just a robot 🛡️']);"
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit

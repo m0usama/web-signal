@@ -12,8 +12,8 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
 
-  const { data: member } = await supabase.from("room_members").select("room_id").eq("user_id", user.id).maybeSingle();
-  if (!member) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const { data: rooms } = await supabase.from("room_members").select("room_id").eq("user_id", user.id).limit(1);
+  if (!rooms?.length) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
 
   // Prefer "tune.mp3", otherwise use the newest audio file in the bucket,
   // so the exact file name you upload doesn't matter.

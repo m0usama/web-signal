@@ -4,6 +4,7 @@ export const PASSWORD = "test-password-123";
 export const NOVA = "nova";
 export const NIGHT = "night";
 export const STRANGER = "stranger";
+export const ROBO = "robo";
 
 export async function login(page: Page, username: string) {
   await page.goto("/login");

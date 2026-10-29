@@ -73,6 +73,11 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   const [connection, setConnection] = useState<Connection>("connecting");
   const [loaded, setLoaded] = useState(false);
   const [presence, setPresence] = useState<PartnerPresence>({ online: false, view: null, typing: false });
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setClock(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
   const [sparks, setSparks] = useState<SparkAnswer[]>([]);
   const [streak, setStreak] = useState(0);
   const [game, setGame] = useState<Game | null>(null);
@@ -100,7 +105,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       supabase.from("message_reactions").select("message_id,user_id,emoji"),
       supabase.from("pokes").select("*").eq("room_id", roomId).gte("created_at", weekAgo).order("created_at", { ascending: false }).limit(60),
       supabase.from("signal_drops").select("*").eq("room_id", roomId).order("created_at", { ascending: true }),
-      supabase.from("profiles").select("id,display_name,avatar_key,map_x,map_y,last_seen_at,mood,mood_at"),
+      supabase
+        .from("profiles")
+        .select("id,display_name,avatar_key,map_x,map_y,last_seen_at,foreground,mood,mood_at")
+        .in("id", [boot.me.id, boot.partner.id]),
       supabase.from("room_members").select("room_id,user_id,last_read_at").eq("room_id", roomId),
       supabase.from("badges").select("*"),
       supabase.from("spark_answers").select("*").eq("room_id", roomId).gte("day", sixtyDaysAgo).order("day", { ascending: false }),
@@ -122,17 +130,17 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     if (profs.data) {
       for (const p of profs.data as Profile[]) {
         if (p.id === boot.me.id) setMe(p);
-        else setPartner(p);
+        else if (p.id === boot.partner.id) setPartner(p);
       }
     }
     if (mems.data) setMembers(mems.data as RoomMember[]);
-    if (bdg.data) setBadges(bdg.data as Badge[]);
+    if (bdg.data) setBadges((bdg.data as Badge[]).filter((b) => b.user_id === boot.me.id || b.user_id === boot.partner.id));
     if (sp.data) setSparks(sp.data as SparkAnswer[]);
     if (typeof st.data === "number") setStreak(st.data);
     if (gm.data) setGame((gm.data[0] as Game) ?? null);
     if (rm.data) setCountdown({ at: (rm.data.next_meet_at as string) ?? null, label: (rm.data.next_meet_label as string) ?? null });
     setLoaded(true);
-  }, [supabase, roomId, boot.me.id]);
+  }, [supabase, roomId, boot.me.id, boot.partner.id]);
 
   // ------------------------------------------------------------ database changes
   useEffect(() => {
@@ -192,7 +200,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
         const row = payload.new as Profile;
         if (row.id === boot.me.id) setMe((p) => ({ ...p, ...row }));
-        else setPartner((p) => ({ ...p, ...row }));
+        else if (row.id === boot.partner.id) setPartner((p) => ({ ...p, ...row }));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "spark_answers", filter }, (payload) => {
         const row = payload.new as SparkAnswer;
@@ -218,6 +226,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "badges" }, (payload) => {
         const row = payload.new as Badge;
+        if (row.user_id !== boot.me.id && row.user_id !== boot.partner.id) return;
         setBadges((list) => (list.some((b) => b.user_id === row.user_id && b.badge_key === row.badge_key) ? list : [...list, row]));
         eventsRef.current.onBadge?.(row);
       })
@@ -242,7 +251,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       disposed = true;
       void supabase.removeChannel(channel);
     };
-  }, [supabase, roomId, generation, loadAll, boot.me.id]);
+  }, [supabase, roomId, generation, loadAll, boot.me.id, boot.partner.id]);
 
   // ------------------------------------------------------------ presence + typing + live events (private channel)
   // Self-healing: reconnects on its own with back-off, clears any stale
@@ -863,6 +872,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   );
 
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);
+  // "In the app" also covers the partner being in a chat with someone else
+  // (presence only covers this room). Heartbeats arrive every 45 seconds.
+  const partnerInApp =
+    presence.online || (!!partner.foreground && !!partner.last_seen_at && clock - Date.parse(partner.last_seen_at) < 100_000);
   const myMember = members.find((m) => m.user_id === boot.me.id);
   const unread = messages.filter(
     (m) => m.sender_id === boot.partner.id && myMember && Date.parse(m.created_at) > Date.parse(myMember.last_read_at),
@@ -881,6 +894,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     badges,
     settings,
     presence,
+    partnerInApp,
     mediaUrls,
     sparks,
     streak,
