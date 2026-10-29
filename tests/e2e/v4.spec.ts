@@ -25,7 +25,12 @@ test("v4: photo drops show for 10s per open, drop owners, everyone on the map, d
   // Photo drop from Night; the marker says who it's from.
   await night.getByRole("button", { name: "▼ DROP", exact: true }).click();
   const box = await night.locator(".map-viewport").boundingBox();
-  await night.mouse.click(box!.x + box!.width * (0.3 + Math.random() * 0.1), box!.y + box!.height * (0.55 + Math.random() * 0.1));
+  // Tap an empty spot (a tap on an existing marker opens it instead), retrying a few spots.
+  for (let i = 0; i < 4 && !(await night.locator(".drop-sheet").isVisible()); i++) {
+    await night.mouse.click(box!.x + box!.width * (0.25 + 0.12 * i), box!.y + box!.height * (0.6 + 0.05 * (i % 2)));
+    await night.waitForTimeout(400);
+    if (await night.locator(".reveal").isVisible()) await night.getByRole("button", { name: "CLOSE", exact: true }).click();
+  }
   await night.locator(".drop-sheet input[type=file]").setInputFiles({ name: "roof.png", mimeType: "image/png", buffer: tinyPng() });
   await expect(night.getByAltText("Photo for this drop")).toBeVisible();
   await expect(night.getByText(/shows for 10 seconds each time/)).toBeVisible();
@@ -49,6 +54,7 @@ test("v4: photo drops show for 10s per open, drop owners, everyone on the map, d
   // Doodle: draw a stroke, undo it, redo it.
   await openTab(nova, "PLAY");
   const pad = nova.getByLabel("Shared drawing pad");
+  await pad.scrollIntoViewIfNeeded();
   const r = (await pad.boundingBox())!;
   await nova.mouse.move(r.x + r.width * 0.2, r.y + r.height * 0.2);
   await nova.mouse.down();
