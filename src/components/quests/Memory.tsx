@@ -37,14 +37,14 @@ export function Memory({
   const theirScore = st.scores?.[partner.id] ?? 0;
 
   // Show a missed pair face-up for a moment so both of you can remember it.
-  const [missShown, setMissShown] = useState<string | null>(null);
+  const [missHidden, setMissHidden] = useState<string | null>(null);
   const missKey = st.miss && g ? `${g.id}:${g.updated_at}` : null;
   useEffect(() => {
     if (!missKey) return;
-    setMissShown(missKey);
-    const t = setTimeout(() => setMissShown(null), 1800);
+    const t = setTimeout(() => setMissHidden(missKey), 1800);
     return () => clearTimeout(t);
   }, [missKey]);
+  const missShown = missKey && missHidden !== missKey ? missKey : null;
 
   const face = (i: number): string | null => {
     if (!g) return null;
