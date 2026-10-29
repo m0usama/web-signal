@@ -360,13 +360,18 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   // ------------------------------------------------------------ last seen + online/offline + visibility
   useEffect(() => {
     // last_seen + whether the app is on screen (the server skips push notifications then)
-    const touch = (foreground = document.visibilityState === "visible") =>
-      void supabase.rpc("touch_presence", { p_foreground: foreground });
+    // Note: Supabase queries only run once awaited/then-ed, so `.then()` is required here.
+    const touch = (foreground = document.visibilityState === "visible") => {
+      supabase.rpc("touch_presence", { p_foreground: foreground }).then(
+        () => {},
+        () => {},
+      );
+    };
     const away = () => touch(false);
     touch();
     const beat = setInterval(() => {
       if (document.visibilityState === "visible") touch(true);
-    }, 45_000);
+    }, 25_000);
     let hiddenAt = 0;
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
@@ -873,9 +878,9 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
 
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);
   // "In the app" also covers the partner being in a chat with someone else
-  // (presence only covers this room). Heartbeats arrive every 45 seconds.
+  // (presence only covers this room). Heartbeats arrive every 25 seconds.
   const partnerInApp =
-    presence.online || (!!partner.foreground && !!partner.last_seen_at && clock - Date.parse(partner.last_seen_at) < 100_000);
+    presence.online || (!!partner.foreground && !!partner.last_seen_at && clock - Date.parse(partner.last_seen_at) < 60_000);
   const myMember = members.find((m) => m.user_id === boot.me.id);
   const unread = messages.filter(
     (m) => m.sender_id === boot.partner.id && myMember && Date.parse(m.created_at) > Date.parse(myMember.last_read_at),

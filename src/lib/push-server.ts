@@ -62,7 +62,7 @@ export async function notifyPartner(event: PushEvent & { room_id: string; from: 
   const sender = people?.find((p) => p.id === event.from);
   const recipient = people?.find((p) => p.id === to);
   const activeNow =
-    recipient?.foreground && recipient.last_seen_at && Date.now() - Date.parse(recipient.last_seen_at as string) < 90_000;
+    recipient?.foreground && recipient.last_seen_at && Date.now() - Date.parse(recipient.last_seen_at as string) < 60_000;
   if (activeNow && event.type !== "tune") return { sent: 0, skipped: "recipient has the app open" };
 
   const { data: subs } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", to);
