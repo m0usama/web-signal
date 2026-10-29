@@ -796,6 +796,25 @@ select.mode-chip {
   display: block;
 }
 
+.avatar-art.is-portrait img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 var(--px) var(--ink);
+}
+
+.avatar-a.is-portrait img {
+  box-shadow:
+    0 0 0 var(--px) var(--ink),
+    0 0 12px rgba(167, 92, 255, 0.7);
+}
+
+.avatar-b.is-portrait img {
+  box-shadow:
+    0 0 0 var(--px) var(--ink),
+    0 0 12px rgba(255, 112, 92, 0.7);
+}
+
 .speech {
   position: relative;
   margin-bottom: 8px;
@@ -2130,5 +2149,11 @@ select.mode-chip {
   .radar-sweep,
   .reveal-burst {
     animation: none !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .lcd-clock {
+    display: none;
   }
 }

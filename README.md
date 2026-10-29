@@ -22,16 +22,14 @@ A private pixel-art communicator for exactly two people. A fictional night city 
 | **Secrets** | Tap the logo three times. Tap rooftops and water towers. Read the bottom-left corner of the river. |
 | **Badges** | Awarded by the database (first signal, heart sync, night owl, finder…). |
 
-### Your own avatars
-
-The two avatars are placeholder pixel art. Drop your own into `public/avatars/`:
+### Avatars
 
 ```
-public/avatars/a.png   ← the first person in setup_pair
-public/avatars/b.png   ← the second person
+public/avatars/a.png   ← SpiderZiya (purple) — the FIRST email in setup_pair
+public/avatars/b.png   ← Spidey (red)        — the SECOND email in setup_pair
 ```
 
-Transparent PNGs drawn on a pixel grid look best (for example 32×36 or 64×72; they're scaled with crisp pixels). The app uses them automatically; delete them to go back to the placeholders.
+Round portraits, 256×256 PNG with transparent corners. Replace the files to change them; if a file is missing the app falls back to a built-in pixel placeholder.
 
 ---
 
@@ -52,9 +50,9 @@ Transparent PNGs drawn on a pixel grid look best (for example 32×36 or 64×72; 
 ### 2. Create and pair the two accounts
 
 1. **Authentication → Users → Add user → Create new user.** Enter the email and a strong password for each person, and tick **Auto Confirm User**. (Or choose **Send invitation** to email a one-time link.)
-2. **SQL Editor**, run once (first person gets avatar A, second gets B):
+2. **SQL Editor**, run once. The first email gets the purple SpiderZiya avatar, the second gets the red Spidey avatar:
    ```sql
-   select public.setup_pair('her@example.com', 'NOVA', 'him@example.com', 'NIGHT');
+   select public.setup_pair('ziya@example.com', 'SPIDERZIYA', 'usama@example.com', 'SPIDEY');
    ```
 3. Share each password privately. Each person can change their password and display name later in **PROFILE**.
 

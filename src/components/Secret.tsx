@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import type { Bootstrap, Message, Poke } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
 export function Secret({ boot, messages, pokes, onClose }: { boot: Bootstrap; messages: Message[]; pokes: Poke[]; onClose: () => void }) {
-  const days = Math.max(1, Math.ceil((Date.now() - Date.parse(boot.roomCreatedAt)) / 864e5));
+  const [openedAt] = useState(() => Date.now());
+  const days = Math.max(1, Math.ceil((openedAt - Date.parse(boot.roomCreatedAt)) / 864e5));
   const hearts = pokes.filter((p) => p.kind === "heart" || p.kind === "fingerheart").length;
   return (
     <div className="secret" role="dialog" aria-modal="true" aria-label="Secret frequency">
