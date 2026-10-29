@@ -35,8 +35,8 @@ test("an account outside the pair sees no room", async ({ page }) => {
 test("the map loads on a phone @smoke", async ({ page }) => {
   await login(page, NOVA);
   await enterApp(page);
-  await expect(page.locator(".avatar-pin.me")).toBeVisible();
-  await expect(page.locator(".avatar-pin.them")).toBeVisible();
+  await expect(page.locator(".avatar-pin.me .pin-name")).toBeVisible();
+  await expect(page.locator(".avatar-pin.them .pin-name")).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
 });
 
@@ -50,8 +50,8 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await enterApp(night);
 
   // Presence: each sees the other online.
-  await expect(nova.locator(".avatar-pin.them.online")).toBeVisible({ timeout: 20_000 });
-  await expect(night.locator(".avatar-pin.them.online")).toBeVisible({ timeout: 20_000 });
+  await expect(nova.locator(".avatar-pin.them.online .pin-name")).toBeVisible({ timeout: 20_000 });
+  await expect(night.locator(".avatar-pin.them.online .pin-name")).toBeVisible({ timeout: 20_000 });
 
   // Text both ways.
   await openTab(nova, "COMMS");
@@ -100,6 +100,18 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await expect(night.getByText(/POOF/)).toBeVisible({ timeout: 15_000 });
   await expect(night.getByRole("button", { name: /TAP TO REVEAL/ })).toHaveCount(0, { timeout: 15_000 });
   await expect(nova.getByText("GHOST PHOTO SENT")).toHaveCount(0, { timeout: 15_000 });
+
+  // Tune: Night turns sound on; Nova presses TUNE; it plays once on Night's side,
+  // Nova's button animates while it plays and stops when it ends.
+  await openTab(night, "PROFILE");
+  await night.getByRole("button", { name: /ENABLE SIGNAL SOUND/ }).click();
+  await openTab(night, "MAP");
+  await openTab(nova, "MAP");
+  await nova.getByRole("button", { name: /Play our tune/ }).click();
+  await expect(night.locator(".tune-banner")).toBeVisible({ timeout: 15_000 });
+  await expect(nova.locator(".tune-btn.status-playing").first()).toBeVisible({ timeout: 15_000 });
+  await expect(night.locator(".tune-banner")).toHaveCount(0, { timeout: 30_000 });
+  await expect(nova.locator(".tune-btn.status-idle").first()).toBeVisible({ timeout: 15_000 });
 
   await nova.context().close();
   await night.context().close();

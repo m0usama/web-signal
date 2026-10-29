@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Original chiptune alerts synthesised with the Web Audio API — no audio
- * files, no borrowed ringtones. Browsers only allow sound after a user
+ * Original chiptune alerts synthesised with the Web Audio API. The only audio
+ * file is the optional shared tune, which lives in private storage (see tune.ts). Browsers only allow sound after a user
  * gesture, so unlock() must be called from a click/tap handler.
  */
 
-export type SoundName = "message" | "poke" | "drop" | "startup" | "ghost" | "send" | "badge";
+export type SoundName = "message" | "poke" | "drop" | "startup" | "ghost" | "send" | "badge" | "tune";
 
 type Note = [freq: number, beats: number];
 
@@ -29,6 +29,17 @@ const SONGS: Record<SoundName, { notes: Note[]; tempo: number; wave: OscillatorT
   ghost: { notes: [[D6, 2], [A5, 2], [D5, 4]], tempo: 0.08, wave: "triangle", gain: 0.6 },
   // tiny confirm blip
   send: { notes: [[A6, 1]], tempo: 0.04, wave: "square", gain: 0.25 },
+  // fallback "our tune" (original melody) when no tune file is uploaded
+  tune: {
+    notes: [
+      [E5, 1], [G5, 1], [C6, 2], [G5, 1], [C6, 1], [E6, 2], [REST, 1],
+      [D6, 1], [C6, 1], [A5, 2], [G5, 1], [A5, 1], [C6, 3], [REST, 1],
+      [E6, 1], [G6, 1], [E6, 1], [D6, 1], [C6, 2], [A5, 1], [G5, 1], [C6, 4],
+    ],
+    tempo: 0.13,
+    wave: "square",
+    gain: 0.45,
+  },
   // fanfare
   badge: { notes: [[G5, 1], [C6, 1], [E6, 1], [G6, 2], [E6, 1], [G6, 4]], tempo: 0.07, wave: "square", gain: 0.45 },
 };
@@ -91,6 +102,38 @@ class ChipSynth {
       t += dur;
     }
     return true;
+  }
+
+  /** Length in seconds of a synthesised sound. */
+  lengthOf(name: SoundName): number {
+    const song = SONGS[name];
+    return song.notes.reduce((t, [, beats]) => t + beats * song.tempo, 0);
+  }
+
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
+  private current: AudioBufferSourceNode | null = null;
+
+  /**
+   * Plays a decoded audio file once through the master volume.
+   * Resolves with its duration; onEnd fires when it finishes.
+   */
+  playBuffer(buffer: AudioBuffer, onEnd: () => void): number | null {
+    if (!this.ctx || !this.master || this.ctx.state !== "running") return null;
+    this.current?.stop();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = false;
+    src.connect(this.master);
+    src.onended = () => {
+      if (this.current === src) this.current = null;
+      onEnd();
+    };
+    this.current = src;
+    src.start();
+    return buffer.duration;
   }
 
   vibrate(pattern: number | number[]) {

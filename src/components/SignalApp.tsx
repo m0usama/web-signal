@@ -6,7 +6,7 @@ import { friendlyError } from "@/lib/messages";
 import { BADGES, POKES } from "@/lib/pixels";
 import { synth } from "@/lib/sound";
 import type { Bootstrap, Message, PokeKind, SignalDrop, Tab } from "@/lib/types";
-import { useRoom } from "@/lib/useRoom";
+import { useRoom, type Room } from "@/lib/useRoom";
 import { CityMap, type Bubble, type Flight, type MapMode } from "./CityMap";
 import { Comms } from "./Comms";
 import { DropComposer, type DropDraft } from "./DropComposer";
@@ -18,6 +18,8 @@ import { Reveal, type RevealTarget } from "./Reveal";
 import { Secret } from "./Secret";
 import { Signals } from "./Signals";
 import { Toasts, type Toast } from "./Toasts";
+import { Equaliser, TuneButton, type TuneStatus } from "./TuneButton";
+import { playTuneOnce } from "@/lib/tune";
 
 const INTRO_KEY = "ws-intro-seen";
 const SOUND_PROMPT_KEY = "ws-sound-prompt";
@@ -75,10 +77,16 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   const [secret, setSecret] = useState(false);
   const [cooling, setCooling] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [tuneOut, setTuneOut] = useState<{ id: string; status: Exclude<TuneStatus, "idle"> } | null>(null);
+  const [tuneIn, setTuneIn] = useState<string | null>(null);
+  const tuneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seq = useRef(0);
   const logoTaps = useRef<number[]>([]);
   const hearts = useRef({ mine: 0, theirs: 0 });
   const prefersReduced = useReducedMotion();
+  // Handlers passed into useRoom run later; these refs give them the latest values.
+  const roomRef = useRef<Room | null>(null);
+  const enableSoundRef = useRef<() => void>(() => {});
   const hour = useHour();
 
   // ------------------------------------------------------------------ toasts & effects
@@ -176,6 +184,47 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
         synth.play("badge");
         toast({ text: `BADGE UNLOCKED: ${BADGES[b.badge_key]?.title ?? b.badge_key}`, icon: BADGES[b.badge_key]?.icon ?? "star", tone: "badge" }, 6000);
       },
+      onTune: async ({ id }) => {
+        const r = roomRef.current;
+        if (!r) return;
+        const name = boot.partner.display_name;
+        if (tuneIn) {
+          r.actions.broadcast("tune-ack", { id, state: "busy" });
+          return;
+        }
+        if (!r.settings.sound_on || !synth.unlocked) {
+          r.actions.broadcast("tune-ack", { id, state: "blocked" });
+          toast(
+            { text: `${name} PLAYED YOU A TUNE — TURN ON SOUND TO HEAR IT`, icon: "zap", tone: "love", action: { label: "SOUND ON", run: () => enableSoundRef.current() } },
+            7000,
+          );
+          return;
+        }
+        setTuneIn(id);
+        shout(boot.partner.id, "♪ ♪ ♪");
+        const duration = await playTuneOnce(() => {
+          setTuneIn(null);
+          r.actions.broadcast("tune-ack", { id, state: "ended" });
+        });
+        if (duration === null) {
+          setTuneIn(null);
+          r.actions.broadcast("tune-ack", { id, state: "blocked" });
+        } else {
+          r.actions.broadcast("tune-ack", { id, state: "started", duration });
+        }
+      },
+      onTuneAck: ({ id, state, duration }) => {
+        if (!tuneOut || tuneOut.id !== id) return;
+        if (tuneTimer.current) clearTimeout(tuneTimer.current);
+        if (state === "started") {
+          setTuneOut({ id, status: "playing" });
+          tuneTimer.current = setTimeout(() => setTuneOut(null), ((duration ?? 30) + 3) * 1000);
+          return;
+        }
+        setTuneOut(null);
+        if (state === "blocked") toast({ text: `${boot.partner.display_name}'S SOUND IS OFF — THEY GOT A NOTE INSTEAD`, tone: "warn" });
+        if (state === "busy") toast({ text: "THE TUNE IS ALREADY PLAYING OVER THERE", tone: "warn" });
+      },
       onPartnerArrive: () => {
         toast({ text: `${boot.partner.display_name} IS ONLINE`, icon: "sparkle", tone: "love" });
         party();
@@ -208,6 +257,11 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
       toast({ text: "THIS BROWSER BLOCKED SOUND — ALERTS WILL FLASH INSTEAD", tone: "warn" });
     }
   }, [room.settings.sound_on, room.actions, toast]);
+
+  useEffect(() => {
+    roomRef.current = room;
+    enableSoundRef.current = () => void enableSound();
+  });
 
   // Unread count in the tab title.
   useEffect(() => {
@@ -283,6 +337,32 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   const openDrop = (d: SignalDrop) => {
     setReveal({ type: "drop", id: d.id, fromName: room.partner.display_name, mine: d.sender_id === boot.me.id });
   };
+
+  const sendTune = () => {
+    if (tuneOut) return;
+    if (!room.presence.online) {
+      toast({ text: `${room.partner.display_name} ISN'T ONLINE — THE TUNE ONLY PLAYS LIVE`, tone: "warn" });
+      return;
+    }
+    const id = crypto.randomUUID();
+    if (!room.actions.broadcast("tune", { id })) {
+      toast({ text: "STILL LINKING — TRY AGAIN IN A SECOND", tone: "warn" });
+      return;
+    }
+    setTuneOut({ id, status: "waiting" });
+    if (tuneTimer.current) clearTimeout(tuneTimer.current);
+    tuneTimer.current = setTimeout(() => {
+      setTuneOut(null);
+      toast({ text: "NO ANSWER — THE TUNE DIDN'T REACH THEM", tone: "warn" });
+    }, 10_000);
+  };
+
+  useEffect(
+    () => () => {
+      if (tuneTimer.current) clearTimeout(tuneTimer.current);
+    },
+    [],
+  );
 
   const onLogoTap = () => {
     const now = Date.now();
@@ -361,6 +441,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
                 <button type="button" className="btn btn-violet" onClick={() => onPoke("heart")} disabled={cooling} aria-label="Send a heart">
                   <Icon name="heart" size={18} />
                 </button>
+                <TuneButton status={tuneOut?.status ?? "idle"} onPress={sendTune} partnerName={room.partner.display_name} />
               </>
             ) : (
               <button
@@ -394,6 +475,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
             )}
             {tab === "signals" && (
               <Signals
+                tune={<TuneButton status={tuneOut?.status ?? "idle"} onPress={sendTune} partnerName={room.partner.display_name} wide />}
                 me={room.me}
                 partner={room.partner}
                 pokes={room.pokes}
@@ -513,6 +595,13 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
               ♪ ENABLE SIGNAL SOUND
             </button>
           </div>
+        </div>
+      )}
+
+      {tuneIn && (
+        <div className="tune-banner" role="status">
+          <Equaliser />
+          <span>{room.partner.display_name} IS PLAYING YOUR TUNE</span>
         </div>
       )}
 

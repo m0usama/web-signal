@@ -30,6 +30,10 @@ export interface RoomEvents {
   onBadge?: (b: Badge) => void;
   onPartnerArrive?: () => void;
   onDropOpened?: (d: SignalDrop) => void;
+  /** Live, not stored: the partner pressed "play tune". */
+  onTune?: (p: { id: string; from: string }) => void;
+  /** Live, not stored: the partner's device reports what happened to our tune. */
+  onTuneAck?: (p: { id: string; state: "started" | "ended" | "blocked" | "busy"; duration?: number }) => void;
 }
 
 export interface PartnerPresence {
@@ -220,6 +224,12 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           if (payload.typing) {
             typingTimer.current = setTimeout(() => setPresence((p) => ({ ...p, typing: false })), 4000);
           }
+        })
+        .on("broadcast", { event: "tune" }, ({ payload }) => {
+          if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTune?.(payload);
+        })
+        .on("broadcast", { event: "tune-ack" }, ({ payload }) => {
+          if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTuneAck?.(payload);
         })
         .subscribe(async (status) => {
           if (status === "SUBSCRIBED" && !disposed) {
@@ -558,6 +568,17 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     void ch.send({ type: "broadcast", event: "typing", payload: { user: boot.me.id, typing } });
   }, [boot.me.id]);
 
+  /** Sends a live event to the partner over the private room channel. */
+  const broadcast = useCallback(
+    (event: "tune" | "tune-ack", payload: Record<string, unknown>) => {
+      const ch = presenceChannel.current;
+      if (!ch) return false;
+      void ch.send({ type: "broadcast", event, payload: { ...payload, from: boot.me.id } });
+      return true;
+    },
+    [boot.me.id],
+  );
+
   const saveSettings = useCallback(
     async (patch: Partial<Omit<Settings, "user_id">>) => {
       setSettings((s) => ({ ...s, ...patch }));
@@ -638,6 +659,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       rename,
       markRead,
       setTyping,
+      broadcast,
       saveSettings,
       requestMedia,
       reload: loadAll,
