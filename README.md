@@ -42,7 +42,7 @@ Round portraits, 256×256 PNG with transparent corners. Replace the files to cha
 2. **Authentication → Sign In / Providers → Email:** turn **off** "Allow new users to sign up".
 3. **SQL Editor → New query:** paste the whole of `supabase/migrations/20261028000000_web_signal.sql` and click **Run**.
    This creates every table, security rule, the private `signal-media` bucket, realtime settings and the cleanup job.
-   Then do the same, in order, with `supabase/migrations/20261029000000_tunes.sql` (the private bucket for your tune) and `supabase/migrations/20261029000001_service_role_grants.sql`.
+   Then do the same, in order, with `supabase/migrations/20261029000000_tunes.sql` (the private bucket for your tune) then `20261029000001_service_role_grants.sql` and `20261029000002_lock_down_function_execute.sql`.
 4. **Database → Extensions:** make sure **pg_cron** is enabled (the migration tries to enable it). If you enable it after running the SQL, run this once:
    ```sql
    select cron.schedule('web-signal-cleanup', '*/10 * * * *', 'select public.cleanup_expired()');
