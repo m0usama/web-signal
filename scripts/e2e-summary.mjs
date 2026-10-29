@@ -20,6 +20,16 @@ const walk = (suite, trail = []) => {
   }
 };
 for (const s of report.suites ?? []) walk(s);
+const titles = [];
+const collect = (suite) => {
+  for (const s of suite.suites ?? []) collect(s);
+  for (const spec of suite.specs ?? []) for (const t of spec.tests ?? []) {
+    const last = t.results?.[t.results.length - 1];
+    titles.push(`${last?.status === "passed" ? "✓" : last?.status ?? "?"} [${t.projectName}] ${spec.title}`);
+  }
+};
+for (const s of report.suites ?? []) collect(s);
+console.log(`::notice title=e2e results::${titles.join("%0A")}`);
 if (out.length) {
   const msg = out.join("\n\n").slice(0, 60000).replace(/%/g, "%25").replace(/\r/g, "").replace(/\n/g, "%0A");
   console.log(`::error title=e2e details::${msg}`);
