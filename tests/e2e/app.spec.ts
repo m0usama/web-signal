@@ -75,7 +75,8 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   // Signal drop: Nova drops a note, Night opens it.
   await nova.getByRole("button", { name: "▼ DROP", exact: true }).click();
   const box = await nova.locator(".map-viewport").boundingBox();
-  await nova.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  // Pick an empty rooftop: away from the avatars and any drops from an earlier attempt.
+  await nova.mouse.click(box!.x + box!.width * (0.25 + Math.random() * 0.1), box!.y + box!.height * (0.68 + Math.random() * 0.1));
   await nova.getByLabel("Note").fill("meet me on this roof");
   await nova.getByRole("button", { name: /DROP IT/ }).click();
   await expect(nova.getByText("SIGNAL DROPPED ON THE MAP")).toBeVisible();
@@ -101,7 +102,8 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await night.waitForFunction(() => !document.querySelector(".reveal-loading"), null, { timeout: 15_000 });
   const revealText = await night.locator(".reveal-panel").textContent();
   await expect(night.getByAltText("Signal media"), `reveal showed: ${revealText}`).toBeVisible();
-  await expect(night.getByText(/POOF/)).toBeVisible({ timeout: 15_000 });
+  // After the 5s window the reveal closes itself and the ghost is gone everywhere.
+  await expect(night.locator(".reveal")).toHaveCount(0, { timeout: 15_000 });
   await expect(night.getByRole("button", { name: /TAP TO REVEAL/ })).toHaveCount(0, { timeout: 15_000 });
   await expect(nova.getByText("GHOST PHOTO SENT")).toHaveCount(0, { timeout: 15_000 });
 
