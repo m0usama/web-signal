@@ -433,5 +433,23 @@ select t.ok((select public.push_check_secret((select v from ctx where k = 'push_
 select t.ok((select not public.push_check_secret('wrong')), 'a wrong webhook secret is rejected');
 reset role;
 
+-- ================================================================== chat-only rooms
+select t.as_user(null);
+select public.set_chat_only('nova@example.com', 'stranger@example.com', true);
+select t.ok((select chat_only from public.private_rooms where id = (select v::uuid from ctx where k = 'room2')), 'owner can make a chat messages-only');
+select t.ok((select not chat_only from public.private_rooms where id = (select v::uuid from ctx where k = 'room')), 'the main chat is unaffected');
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+insert into public.messages (room_id, client_id, kind, body, mode)
+values ((select v::uuid from ctx where k = 'room2'), gen_random_uuid(), 'text', 'still can chat', 'normal');
+select t.ok((select count(*) = 1 from public.messages where body = 'still can chat'), 'messages still work in a chat-only room');
+select t.throws($$insert into public.pokes (room_id, kind) values ((select v::uuid from ctx where k='room2'), 'heart')$$, 'CHAT_ONLY', 'no pokes in a chat-only room');
+select t.throws($$insert into public.signal_drops (room_id, client_id, x, y, body) values ((select v::uuid from ctx where k='room2'), gen_random_uuid(), 0.5, 0.5, 'hi')$$, 'CHAT_ONLY', 'no drops in a chat-only room');
+select t.throws($$select public.ttt_new((select v::uuid from ctx where k='room2'))$$, 'CHAT_ONLY', 'no games in a chat-only room');
+select t.throws($$insert into public.spark_answers (room_id, answer) values ((select v::uuid from ctx where k='room2'), 'x')$$, 'CHAT_ONLY', 'no spark in a chat-only room');
+select t.throws($$select public.set_countdown((select v::uuid from ctx where k='room2'), now() + interval '1 day', 'x')$$, 'CHAT_ONLY', 'no countdown in a chat-only room');
+select t.throws($$select public.set_chat_only('nova@example.com', 'stranger@example.com', false)$$, 'permission denied', 'people cannot change chat-only');
+reset role;
+
 rollback;
 \echo 'ALL DATABASE SECURITY TESTS PASSED'

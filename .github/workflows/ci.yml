@@ -65,6 +65,7 @@ jobs:
             -c "select public.add_person('robo@web-signal.local','R.O.B.O','c');" \
             -c "select public.link_room('nova@web-signal.local','robo@web-signal.local');" \
             -c "select public.link_room('night@web-signal.local','robo@web-signal.local');" \
+            -c "select public.set_chat_only('night@web-signal.local','robo@web-signal.local', true);" \
             -c "select public.set_auto_reply('robo@web-signal.local','night@web-signal.local', array['beep boop, just a robot here 🤖','still just a robot 🛡️']);"
 
       - name: Install Playwright browsers

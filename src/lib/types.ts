@@ -125,6 +125,8 @@ export interface Contact {
   countdown?: Countdown;
   partner: Profile;
   unread: number;
+  /** Messages only: no pokes, drops, games, spark, countdown or tune. */
+  chatOnly?: boolean;
 }
 
 export interface Bootstrap {
@@ -139,4 +141,6 @@ export interface Bootstrap {
   contacts?: Contact[];
   /** Screen to open on (kept when switching between people). */
   initialTab?: Tab;
+  /** This chat is messages only. */
+  chatOnly?: boolean;
 }

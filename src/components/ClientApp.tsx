@@ -157,6 +157,7 @@ export function ClientApp({ boot, allMembers = [] }: { boot: Bootstrap; allMembe
         partner: current.partner,
         members: current.roomId === boot.roomId ? boot.members : allMembers.filter((m) => m.room_id === current.roomId),
         initialTab: active.tab,
+        chatOnly: current.chatOnly,
       }
     : boot;
 

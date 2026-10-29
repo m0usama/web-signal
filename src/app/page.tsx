@@ -19,7 +19,7 @@ export default async function Home() {
     supabase.from("profiles").select(PROFILE_FIELDS),
     supabase.from("room_members").select("room_id,user_id,last_read_at"),
     supabase.from("user_settings").select("user_id,sound_on,volume,theme,reduced_fx").eq("user_id", user.id).maybeSingle(),
-    supabase.from("private_rooms").select("id,created_at,next_meet_at,next_meet_label").order("created_at", { ascending: true }),
+    supabase.from("private_rooms").select("id,created_at,next_meet_at,next_meet_label,chat_only").order("created_at", { ascending: true }),
   ]);
 
   const people = (profiles as Profile[] | null) ?? [];
@@ -37,6 +37,7 @@ export default async function Home() {
       countdown: { at: room.next_meet_at ?? null, label: room.next_meet_label ?? null },
       partner,
       unread: 0,
+      chatOnly: !!room.chat_only,
     });
   }
 
@@ -83,6 +84,7 @@ export default async function Home() {
     partner: first.partner,
     members: allMembers.filter((m) => m.room_id === first.roomId),
     contacts,
+    chatOnly: first.chatOnly,
     settings: (settings as Settings | null) ?? { user_id: user.id, sound_on: true, volume: 0.6, theme: "auto", reduced_fx: false },
   };
 

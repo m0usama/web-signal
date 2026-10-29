@@ -26,6 +26,8 @@ import { playTuneOnce } from "@/lib/tune";
 import { primeRadio } from "@/lib/radio";
 import { registerServiceWorker } from "@/lib/push-client";
 import { ContactBar } from "./ContactBar";
+import { Avatar } from "./Avatar";
+import { playTuneInOtherRoom } from "@/lib/tune-remote";
 
 const INTRO_KEY = "ws-intro-seen";
 const SOUND_PROMPT_KEY = "ws-sound-prompt";
@@ -102,7 +104,9 @@ export function SignalApp({
   contacts?: Contact[];
   onSwitch?: (roomId: string, tab: Tab) => void;
 }) {
-  const [tab, setTab] = useState<Tab>(boot.initialTab ?? "map");
+  const [tab, setTab] = useState<Tab>(() =>
+    boot.chatOnly && (boot.initialTab === "signals" || boot.initialTab === "play") ? "comms" : (boot.initialTab ?? "map"),
+  );
   const now = useNow(20_000);
   // This component only renders in the browser (see ClientApp), so storage is safe to read here.
   const [introDone, setIntroDone] = useState(() => readSession(INTRO_KEY));
@@ -120,7 +124,9 @@ export function SignalApp({
   const [secret, setSecret] = useState(false);
   const [cooling, setCooling] = useState(false);
   const [flash, setFlash] = useState(false);
-  const [tuneOut, setTuneOut] = useState<{ id: string; status: Exclude<TuneStatus, "idle"> } | null>(null);
+  const [tuneOut, setTuneOut] = useState<{ id: string; status: Exclude<TuneStatus, "idle">; name?: string } | null>(null);
+  const [tunePicker, setTunePicker] = useState(false);
+  const chatOnly = !!boot.chatOnly;
   const [tuneIn, setTuneIn] = useState<string | null>(null);
   const tuneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seq = useRef(0);
@@ -261,7 +267,7 @@ export function SignalApp({
       },
       onTune: async ({ id }) => {
         const r = roomRef.current;
-        if (!r) return;
+        if (!r || boot.chatOnly) return;
         const name = boot.partner.display_name;
         if (tuneIn) {
           r.actions.broadcast("tune-ack", { id, state: "busy" });
@@ -446,6 +452,45 @@ export function SignalApp({
     setReveal({ type: "drop", id: d.id, fromName: room.partner.display_name, mine: d.sender_id === boot.me.id });
   };
 
+  // Who you can play the tune for: everyone except messages-only chats.
+  const tuneTargets: { roomId: string; partner: typeof room.partner }[] = contacts.length
+    ? contacts.filter((c) => !c.chatOnly).map((c) => ({ roomId: c.roomId, partner: c.roomId === boot.roomId ? room.partner : c.partner }))
+    : chatOnly
+      ? []
+      : [{ roomId: boot.roomId, partner: room.partner }];
+
+  const tuneFor = (target: { roomId: string; partner: typeof room.partner }) => {
+    setTunePicker(false);
+    if (tuneOut) return;
+    if (target.roomId === boot.roomId) {
+      sendTune();
+      return;
+    }
+    const name = target.partner.display_name;
+    const id = `remote-${target.roomId}`;
+    setTuneOut({ id, status: "waiting", name });
+    void playTuneInOtherRoom(room.supabase, target.roomId, boot.me.id, target.partner.id, (state, duration) => {
+      if (state === "started") {
+        setTuneOut({ id, status: "playing", name });
+        if (tuneTimer.current) clearTimeout(tuneTimer.current);
+        tuneTimer.current = setTimeout(() => setTuneOut(null), ((duration ?? 30) + 3) * 1000);
+      } else setTuneOut((t) => (t?.id === id ? null : t));
+    }).then((result) => {
+      if (result === "started") return;
+      setTuneOut((t) => (t?.id === id ? null : t));
+      if (result === "no-answer") toast({ text: `${name} DIDN'T ANSWER — SENT A NOTIFICATION INSTEAD`, tone: "warn" });
+      if (result === "blocked") toast({ text: `${name}'S SOUND IS OFF — THEY GOT A NOTE INSTEAD`, tone: "warn" });
+      if (result === "busy") toast({ text: "THE TUNE IS ALREADY PLAYING OVER THERE", tone: "warn" });
+    });
+  };
+
+  const onTunePress = () => {
+    if (tuneOut) return;
+    if (tuneTargets.length === 0) return;
+    if (tuneTargets.length === 1) tuneFor(tuneTargets[0]);
+    else setTunePicker(true);
+  };
+
   const sendTune = () => {
     if (tuneOut) return;
     // Always try: presence can lag a few seconds, and the reply (or the
@@ -557,16 +602,26 @@ export function SignalApp({
           <div className="map-actions">
             {mapMode === "browse" ? (
               <>
-                <button type="button" className="btn btn-coral" onClick={() => setMapMode("drop")}>
-                  ▼ DROP
-                </button>
+                {!chatOnly && (
+                  <button type="button" className="btn btn-coral" onClick={() => setMapMode("drop")}>
+                    ▼ DROP
+                  </button>
+                )}
                 <button type="button" className="btn btn-green" onClick={() => setMapMode("move")}>
                   ⇄ MOVE
                 </button>
-                <button type="button" className="btn btn-violet" onClick={() => onPoke("heart")} disabled={cooling} aria-label="Send a heart">
-                  <Icon name="heart" size={18} />
-                </button>
-                <TuneButton status={tuneOut?.status ?? "idle"} onPress={sendTune} partnerName={room.partner.display_name} />
+                {!chatOnly && (
+                  <button type="button" className="btn btn-violet" onClick={() => onPoke("heart")} disabled={cooling} aria-label="Send a heart">
+                    <Icon name="heart" size={18} />
+                  </button>
+                )}
+                {tuneTargets.length > 0 && (
+                  <TuneButton
+                    status={tuneOut?.status ?? "idle"}
+                    onPress={onTunePress}
+                    partnerName={tuneOut?.name ?? (tuneTargets.length === 1 ? tuneTargets[0].partner.display_name : room.partner.display_name)}
+                  />
+                )}
               </>
             ) : (
               <button
@@ -624,7 +679,14 @@ export function SignalApp({
                     <CountdownEditor value={room.countdown} onSave={(at, label) => room.actions.saveCountdown(at, label)} />
                   </>
                 }
-                tune={<TuneButton status={tuneOut?.status ?? "idle"} onPress={sendTune} partnerName={room.partner.display_name} wide />}
+                tune={
+                  <TuneButton
+                    status={tuneOut?.status ?? "idle"}
+                    onPress={onTunePress}
+                    partnerName={tuneOut?.name ?? (tuneTargets.length === 1 ? tuneTargets[0].partner.display_name : "SOMEONE")}
+                    wide
+                  />
+                }
                 me={room.me}
                 partner={room.partner}
                 pokes={room.pokes}
@@ -697,7 +759,7 @@ export function SignalApp({
         )}
       </main>
 
-      <nav className="nav-bar" aria-label="Main">
+      <nav className={`nav-bar ${chatOnly ? "nav-3" : ""}`} aria-label="Main">
         {(
           [
             ["map", "MAP", "◉"],
@@ -706,7 +768,9 @@ export function SignalApp({
             ["play", "PLAY", "✦"],
             ["profile", "ME", "☺"],
           ] as const
-        ).map(([key, label, glyph]) => (
+        )
+          .filter(([key]) => !chatOnly || (key !== "signals" && key !== "play"))
+          .map(([key, label, glyph]) => (
           <button
             key={key}
             type="button"
@@ -773,6 +837,25 @@ export function SignalApp({
               ♪ ENABLE SIGNAL SOUND
             </button>
           </div>
+        </div>
+      )}
+
+      {tunePicker && (
+        <div className="sheet tune-picker" role="dialog" aria-label="Play the tune for">
+          <div className="sheet-head lcd">
+            <span>♪ PLAY THE TUNE FOR…</span>
+          </div>
+          <div className="tune-picker-list">
+            {tuneTargets.map((t) => (
+              <button key={t.roomId} type="button" className="contact-chip" onClick={() => tuneFor(t)} aria-label={`Play the tune for ${t.partner.display_name}`}>
+                <Avatar avatarKey={t.partner.avatar_key} size={30} />
+                <span className="contact-name">{t.partner.display_name}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost wide" onClick={() => setTunePicker(false)}>
+            CANCEL
+          </button>
         </div>
       )}
 

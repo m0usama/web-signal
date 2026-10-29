@@ -3086,3 +3086,31 @@ input[type="datetime-local"].field {
 .cam-open {
   font-size: 18px;
 }
+
+.nav-bar.nav-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tune-picker {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  z-index: 70;
+  transform: translateX(-50%);
+  width: min(92vw, 380px);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.tune-picker-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tune-picker-list .contact-chip {
+  max-width: none;
+  padding: 6px 12px 6px 6px;
+  font-size: 14px;
+}
