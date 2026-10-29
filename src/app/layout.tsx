@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   description: "A private signal for two.",
   robots: { index: false, follow: false },
   appleWebApp: { capable: true, title: "WEB//SIGNAL", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = {
