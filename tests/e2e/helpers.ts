@@ -10,7 +10,12 @@ export async function login(page: Page, email: string) {
   await page.getByLabel("EMAIL").fill(email);
   await page.getByLabel("PASSWORD").fill(PASSWORD);
   await page.getByRole("button", { name: /JACK IN/ }).click();
-  await page.waitForURL((u) => u.pathname === "/");
+  const failed = page.locator(".form-error");
+  await Promise.race([page.waitForURL((u) => u.pathname === "/"), failed.waitFor({ timeout: 30_000 })]);
+  if (await failed.isVisible()) {
+    const detail = await page.locator(".login-detail").textContent().catch(() => "");
+    throw new Error(`Login failed for ${email}: ${await failed.textContent()} ${detail ?? ""}`);
+  }
 }
 
 /** Gets past the intro and the sound prompt. */

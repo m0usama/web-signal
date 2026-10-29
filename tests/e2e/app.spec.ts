@@ -14,7 +14,7 @@ test("wrong password is rejected @smoke", async ({ page }) => {
   await page.getByLabel("EMAIL").fill(NOVA);
   await page.getByLabel("PASSWORD").fill("not-the-password");
   await page.getByRole("button", { name: /JACK IN/ }).click();
-  await expect(page.getByRole("alert")).toHaveText(/WRONG EMAIL OR PASSWORD/);
+  await expect(page.locator(".form-error")).toHaveText(/WRONG EMAIL OR PASSWORD/);
 });
 
 test("media API refuses anonymous requests", async ({ request }) => {

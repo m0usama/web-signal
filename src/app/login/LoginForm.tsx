@@ -12,6 +12,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [detail, setDetail] = useState("");
 
   return (
     <main className="login">
@@ -22,9 +23,17 @@ export function LoginForm() {
           e.preventDefault();
           setBusy(true);
           setError("");
-          const { error: err } = await getBrowserSupabase().auth.signInWithPassword({ email: email.trim(), password });
+          setDetail("");
+          let err: { message: string; status?: number } | null = null;
+          try {
+            ({ error: err } = await getBrowserSupabase().auth.signInWithPassword({ email: email.trim(), password }));
+          } catch (e) {
+            err = { message: e instanceof Error ? e.message : String(e) };
+          }
           if (err) {
-            setError(err.message.toLowerCase().includes("invalid") ? "WRONG EMAIL OR PASSWORD" : "COULDN'T CONNECT — TRY AGAIN");
+            const wrong = err.status === 400 || /invalid|credentials/i.test(err.message);
+            setError(wrong ? "WRONG EMAIL OR PASSWORD" : "COULDN'T CONNECT — TRY AGAIN");
+            if (!wrong) setDetail(err.message);
             setBusy(false);
             return;
           }
@@ -63,6 +72,7 @@ export function LoginForm() {
             {error}
           </p>
         )}
+        {detail && <p className="fine login-detail">{detail}</p>}
         <button className="btn btn-coral wide" type="submit" disabled={busy}>
           {busy ? "CONNECTING…" : "JACK IN ▸"}
         </button>
