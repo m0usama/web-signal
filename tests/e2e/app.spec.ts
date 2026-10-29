@@ -97,7 +97,10 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   const reveal = night.getByRole("button", { name: /TAP TO REVEAL/ });
   await expect(reveal).toBeVisible();
   await reveal.click();
-  await expect(night.getByAltText("Signal media")).toBeVisible();
+  await night.locator(".reveal").waitFor();
+  await night.waitForFunction(() => !document.querySelector(".reveal-loading"), null, { timeout: 15_000 });
+  const revealText = await night.locator(".reveal-panel").textContent();
+  await expect(night.getByAltText("Signal media"), `reveal showed: ${revealText}`).toBeVisible();
   await expect(night.getByText(/POOF/)).toBeVisible({ timeout: 15_000 });
   await expect(night.getByRole("button", { name: /TAP TO REVEAL/ })).toHaveCount(0, { timeout: 15_000 });
   await expect(nova.getByText("GHOST PHOTO SENT")).toHaveCount(0, { timeout: 15_000 });

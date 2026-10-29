@@ -38,6 +38,14 @@ export function Reveal({
   const [error, setError] = useState("");
   const [left, setLeft] = useState<number | null>(null);
   const closed = useRef(false);
+  // Parent callbacks change every render; keep the latest in refs so the
+  // open request runs exactly once per signal.
+  const onExpiredRef = useRef(onExpired);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onExpiredRef.current = onExpired;
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +67,7 @@ export function Reveal({
                 : "COULDN'T OPEN THIS SIGNAL",
           );
           setState("error");
-          if (json.error === "EXPIRED") onExpired(target.id);
+          if (json.error === "EXPIRED") onExpiredRef.current(target.id);
           return;
         }
         setData(json as Opened);
@@ -75,7 +83,7 @@ export function Reveal({
     return () => {
       cancelled = true;
     };
-  }, [target.type, target.id, reduced, onExpired]);
+  }, [target.type, target.id, reduced]);
 
   // Ghost countdown: when it hits zero the content is removed for good.
   useEffect(() => {
@@ -87,16 +95,16 @@ export function Reveal({
       if (ms <= 0) {
         setState("gone");
         setData((d) => (d ? { ...d, url: null } : d));
-        onExpired(target.id);
+        onExpiredRef.current(target.id);
         setTimeout(() => {
-          if (!closed.current) onClose();
+          if (!closed.current) onCloseRef.current();
         }, 1200);
       }
     };
     tick();
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [state, data?.viewUntil, data?.mode, onExpired, onClose, target.id]);
+  }, [state, data?.viewUntil, data?.mode, target.id]);
 
   const close = () => {
     closed.current = true;

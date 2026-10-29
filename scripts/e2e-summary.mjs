@@ -9,11 +9,13 @@ const walk = (suite, trail = []) => {
   for (const s of suite.suites ?? []) walk(s, [...trail, s.title]);
   for (const spec of suite.specs ?? []) {
     for (const t of spec.tests ?? []) {
-      const last = t.results?.[t.results.length - 1];
-      if (!last || last.status === "passed" || last.status === "skipped") continue;
-      const err = (last.errors?.[0]?.message ?? last.error?.message ?? "").replace(/\u001b\[[0-9;]*m/g, "");
-      const loc = last.errors?.[0]?.location ?? last.error?.location;
-      out.push(`[${t.projectName}] ${spec.title} — ${last.status}${loc ? ` @ line ${loc.line}` : ""}\n${err.split("\n").slice(0, 14).join("\n")}`);
+      for (const [i, r] of (t.results ?? []).entries()) {
+        if (r.status === "passed" || r.status === "skipped") continue;
+        for (const e of r.errors?.length ? r.errors : [r.error ?? {}]) {
+          const err = (e.message ?? "").replace(/\u001b\[[0-9;]*m/g, "");
+          out.push(`[${t.projectName}] ${spec.title} — try ${i + 1} ${r.status}${e.location ? ` @ line ${e.location.line}` : ""}\n${err.split("\n").slice(0, 12).join("\n")}`);
+        }
+      }
     }
   }
 };

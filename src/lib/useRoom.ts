@@ -622,6 +622,30 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     }, 80);
   }, []);
 
+  const actions = useMemo(
+    () => ({
+      sendText,
+      sendSticker,
+      sendMedia,
+      retry,
+      discardFailed,
+      unsend,
+      react,
+      poke,
+      createDrop,
+      deleteDrop,
+      moveMe,
+      rename,
+      markRead,
+      setTyping,
+      broadcast,
+      saveSettings,
+      requestMedia,
+      reload: loadAll,
+    }),
+    [sendText, sendSticker, sendMedia, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, markRead, setTyping, broadcast, saveSettings, requestMedia, loadAll],
+  );
+
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);
   const myMember = members.find((m) => m.user_id === boot.me.id);
   const unread = messages.filter(
@@ -644,26 +668,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     mediaUrls,
     partnerLastReadAt: partnerMember?.last_read_at,
     unread,
-    actions: {
-      sendText,
-      sendSticker,
-      sendMedia,
-      retry,
-      discardFailed,
-      unsend,
-      react,
-      poke,
-      createDrop,
-      deleteDrop,
-      moveMe,
-      rename,
-      markRead,
-      setTyping,
-      broadcast,
-      saveSettings,
-      requestMedia,
-      reload: loadAll,
-    },
+    actions,
   };
 }
 

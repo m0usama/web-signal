@@ -410,6 +410,10 @@ function MediaThumb({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const needRef = useRef(onNeed);
+  useEffect(() => {
+    needRef.current = onNeed;
+  });
   const failed = !!url && failedUrl === url;
   useEffect(() => {
     const expired = exp !== undefined && exp < Date.now();
@@ -419,7 +423,7 @@ function MediaThumb({
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          onNeed();
+          needRef.current();
           io.disconnect();
         }
       },
@@ -427,7 +431,7 @@ function MediaThumb({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [url, exp, onNeed, m._status]);
+  }, [url, exp, m._status]);
 
   return (
     <div ref={ref} className="media-thumb">
