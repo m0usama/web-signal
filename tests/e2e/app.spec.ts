@@ -57,7 +57,7 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await openTab(nova, "COMMS");
   await openTab(night, "COMMS");
   await nova.getByLabel("Message", { exact: true }).fill("hello from nova");
-  await nova.getByRole("button", { name: "SEND" }).click();
+  await nova.getByRole("button", { name: "SEND", exact: true }).click();
   await expect(night.getByText("hello from nova")).toBeVisible();
   await night.getByLabel("Message", { exact: true }).fill("hey nova 💜");
   await night.keyboard.press("Enter");
@@ -72,7 +72,7 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await expect(nova.getByText("HEY YOU!").first()).toBeVisible();
 
   // Signal drop: Nova drops a note, Night opens it.
-  await nova.getByRole("button", { name: "▼ DROP" }).click();
+  await nova.getByRole("button", { name: "▼ DROP", exact: true }).click();
   const box = await nova.locator(".map-viewport").boundingBox();
   await nova.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
   await nova.getByLabel("Note").fill("meet me on this roof");
@@ -82,7 +82,7 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await expect(marker).toBeVisible();
   await marker.click();
   await expect(night.getByText("meet me on this roof")).toBeVisible();
-  await night.getByRole("button", { name: "CLOSE" }).click();
+  await night.getByRole("button", { name: "CLOSE", exact: true }).click();
   await expect(nova.getByText(/OPENED YOUR DROP/)).toBeVisible();
 
   // Ghost photo: one look, then gone for good.
