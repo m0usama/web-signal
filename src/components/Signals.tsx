@@ -6,6 +6,7 @@ import type { Badge, Poke, PokeKind, Profile, SignalDrop } from "@/lib/types";
 import { Icon } from "./Icon";
 
 export function Signals({
+  top,
   tune,
   me,
   partner,
@@ -19,6 +20,7 @@ export function Signals({
   onOpenDrop,
   onDeleteDrop,
 }: {
+  top?: React.ReactNode;
   tune?: React.ReactNode;
   me: Profile;
   partner: Profile;
@@ -38,6 +40,7 @@ export function Signals({
 
   return (
     <section className="panel-scroll signals" aria-label="Signals">
+      {top}
       {tune && <div className="tune-row">{tune}</div>}
       <h2 className="panel-title">POKE {partner.display_name}</h2>
       <div className="poke-pad">

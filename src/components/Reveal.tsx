@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { GhostVoicePlayer } from "./Voice";
 
 export interface RevealTarget {
   type: "message" | "drop";
@@ -11,6 +12,7 @@ export interface RevealTarget {
 }
 
 interface Opened {
+  kind?: string | null;
   url: string | null;
   mode: string;
   viewUntil: string | null;
@@ -116,7 +118,7 @@ export function Reveal({
       <div className="reveal-burst" aria-hidden />
       <div className="reveal-panel">
         <div className="reveal-head">
-          <span className="lcd">{target.type === "drop" ? "SIGNAL DROP" : "GHOST SIGNAL"} · FROM {target.mine ? "YOU" : target.fromName}</span>
+          <span className="lcd">{target.type === "drop" ? "SIGNAL DROP" : data?.kind === "voice" ? "GHOST VOICE" : "GHOST SIGNAL"} · FROM {target.mine ? "YOU" : target.fromName}</span>
           {left !== null && state === "show" && <span className="reveal-count">{left}</span>}
         </div>
 
@@ -133,7 +135,20 @@ export function Reveal({
 
         {state === "show" && data && (
           <div className="reveal-content">
-            {data.url && (
+            {data.url && data.kind === "voice" && (
+              <GhostVoicePlayer
+                url={data.url}
+                onDone={() => {
+                  setState("gone");
+                  setData((d) => (d ? { ...d, url: null } : d));
+                  onExpiredRef.current(target.id);
+                  setTimeout(() => {
+                    if (!closed.current) onCloseRef.current();
+                  }, 1200);
+                }}
+              />
+            )}
+            {data.url && data.kind !== "voice" && (
               <img
                 src={data.url}
                 alt="Signal media"

@@ -181,4 +181,5 @@ export const BADGES: Record<string, { title: string; hint: string; icon: string 
   heart_sync: { title: "HEART SYNC", hint: "Send hearts within 10 seconds of each other", icon: "heart" },
   night_owl: { title: "NIGHT OWL", hint: "Send a signal after midnight", icon: "moon" },
   chatterbox: { title: "CHATTERBOX", hint: "Send 100 signals", icon: "coffee" },
+  rooftop_champ: { title: "ROOFTOP CHAMP", hint: "Win a game of rooftop tic-tac-toe", icon: "star" },
 };

@@ -10,6 +10,7 @@ const NORMAL_TTL = 120; // seconds
 
 type OpenRow = {
   id: string;
+  kind?: string | null;
   mode: string;
   media_path: string | null;
   opened_at: string | null;
@@ -107,5 +108,6 @@ export async function POST(request: Request) {
     body: row.body ?? null,
     sticker: row.sticker ?? null,
     mediaKind: row.media_kind ?? null,
+    kind: row.kind ?? null,
   });
 }

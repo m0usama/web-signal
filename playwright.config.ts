@@ -18,7 +18,15 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        permissions: ["microphone", "notifications"],
+        // A fake microphone so voice notes can be recorded in tests.
+        launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+      },
+    },
     { name: "iphone-safari", use: { ...devices["iPhone 14"] }, grep: /@smoke/ },
   ],
   webServer: process.env.E2E_NO_SERVER

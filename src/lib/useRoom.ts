@@ -6,9 +6,14 @@ import { getBrowserSupabase } from "./supabase/client";
 import { removeMessage, sortMessages, upsertMessage } from "./messages";
 import { isLive } from "./expiry";
 import { kindForMime, mediaPath, prepareImage, validateFile, type AllowedMime } from "./upload";
+import { baseMime, ghostSecondsForVoice, voiceExtension, type Recording } from "./voice";
 import type {
   Badge,
   Bootstrap,
+  Countdown,
+  Game,
+  Mood,
+  SparkAnswer,
   Message,
   Poke,
   PokeKind,
@@ -34,7 +39,15 @@ export interface RoomEvents {
   onTune?: (p: { id: string; from: string }) => void;
   /** Live, not stored: the partner's device reports what happened to our tune. */
   onTuneAck?: (p: { id: string; state: "started" | "ended" | "blocked" | "busy"; duration?: number }) => void;
+  /** Live doodle strokes from the partner. */
+  onDoodle?: (p: DoodleEvent) => void;
+  onSpark?: (a: SparkAnswer) => void;
+  onGame?: (g: Game) => void;
 }
+
+export type DoodleEvent =
+  | { t: "stroke"; id: string; color: string; size: number; pts: number[] }
+  | { t: "clear" };
 
 export interface PartnerPresence {
   online: boolean;
@@ -60,6 +73,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   const [connection, setConnection] = useState<Connection>("connecting");
   const [loaded, setLoaded] = useState(false);
   const [presence, setPresence] = useState<PartnerPresence>({ online: false, view: null, typing: false });
+  const [sparks, setSparks] = useState<SparkAnswer[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [game, setGame] = useState<Game | null>(null);
+  const [countdown, setCountdown] = useState<Countdown>(boot.countdown ?? { at: null, label: null });
   const [mediaUrls, setMediaUrls] = useState<Record<string, { url: string; exp: number }>>({});
   const [generation, setGeneration] = useState(0);
 
@@ -77,14 +94,19 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   // ------------------------------------------------------------ initial + refresh load
   const loadAll = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
-    const [msgs, reacts, pk, dr, profs, mems, bdg] = await Promise.all([
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
+    const [msgs, reacts, pk, dr, profs, mems, bdg, sp, st, gm, rm] = await Promise.all([
       supabase.from("messages").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(200),
       supabase.from("message_reactions").select("message_id,user_id,emoji"),
       supabase.from("pokes").select("*").eq("room_id", roomId).gte("created_at", weekAgo).order("created_at", { ascending: false }).limit(60),
       supabase.from("signal_drops").select("*").eq("room_id", roomId).order("created_at", { ascending: true }),
-      supabase.from("profiles").select("id,display_name,avatar_key,map_x,map_y,last_seen_at"),
+      supabase.from("profiles").select("id,display_name,avatar_key,map_x,map_y,last_seen_at,mood,mood_at"),
       supabase.from("room_members").select("room_id,user_id,last_read_at").eq("room_id", roomId),
       supabase.from("badges").select("*"),
+      supabase.from("spark_answers").select("*").eq("room_id", roomId).gte("day", sixtyDaysAgo).order("day", { ascending: false }),
+      supabase.rpc("spark_streak", { p_room: roomId }),
+      supabase.from("games").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1),
+      supabase.from("private_rooms").select("next_meet_at,next_meet_label").eq("id", roomId).maybeSingle(),
     ]);
     if (msgs.data) {
       setMessages((prev) => {
@@ -105,6 +127,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     }
     if (mems.data) setMembers(mems.data as RoomMember[]);
     if (bdg.data) setBadges(bdg.data as Badge[]);
+    if (sp.data) setSparks(sp.data as SparkAnswer[]);
+    if (typeof st.data === "number") setStreak(st.data);
+    if (gm.data) setGame((gm.data[0] as Game) ?? null);
+    if (rm.data) setCountdown({ at: (rm.data.next_meet_at as string) ?? null, label: (rm.data.next_meet_label as string) ?? null });
     setLoaded(true);
   }, [supabase, roomId, boot.me.id]);
 
@@ -167,6 +193,28 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
         const row = payload.new as Profile;
         if (row.id === boot.me.id) setMe((p) => ({ ...p, ...row }));
         else setPartner((p) => ({ ...p, ...row }));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "spark_answers", filter }, (payload) => {
+        const row = payload.new as SparkAnswer;
+        setSparks((list) =>
+          list.some((a) => a.day === row.day && a.user_id === row.user_id) ? list : [row, ...list],
+        );
+        if (row.user_id !== boot.me.id) eventsRef.current.onSpark?.(row);
+        void supabase.rpc("spark_streak", { p_room: roomId }).then(({ data }) => typeof data === "number" && setStreak(data));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "games", filter }, (payload) => {
+        if (payload.eventType === "DELETE") return;
+        const row = payload.new as Game;
+        setGame((g) => {
+          if (g && g.id !== row.id && Date.parse(g.created_at) > Date.parse(row.created_at)) return g;
+          if (g?.id === row.id && Date.parse(g.updated_at) > Date.parse(row.updated_at)) return g;
+          if (!g || g.updated_at !== row.updated_at || g.id !== row.id) queueMicrotask(() => eventsRef.current.onGame?.(row));
+          return row;
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "private_rooms", filter: `id=eq.${roomId}` }, (payload) => {
+        const row = payload.new as { next_meet_at: string | null; next_meet_label: string | null };
+        setCountdown({ at: row.next_meet_at, label: row.next_meet_label });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "badges" }, (payload) => {
         const row = payload.new as Badge;
@@ -252,6 +300,9 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
         .on("broadcast", { event: "tune" }, ({ payload }) => {
           if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTune?.(payload);
         })
+        .on("broadcast", { event: "doodle" }, ({ payload }) => {
+          if (payload?.from === boot.partner.id) eventsRef.current.onDoodle?.(payload as DoodleEvent);
+        })
         .on("broadcast", { event: "tune-ack" }, ({ payload }) => {
           if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTuneAck?.(payload);
         })
@@ -299,19 +350,22 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
 
   // ------------------------------------------------------------ last seen + online/offline + visibility
   useEffect(() => {
-    const touch = () => void supabase.rpc("touch_presence");
+    // last_seen + whether the app is on screen (the server skips push notifications then)
+    const touch = (foreground = document.visibilityState === "visible") =>
+      void supabase.rpc("touch_presence", { p_foreground: foreground });
+    const away = () => touch(false);
     touch();
     const beat = setInterval(() => {
-      if (document.visibilityState === "visible") touch();
-    }, 60_000);
+      if (document.visibilityState === "visible") touch(true);
+    }, 45_000);
     let hiddenAt = 0;
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         hiddenAt = Date.now();
-        touch();
-      } else if (hiddenAt && Date.now() - hiddenAt > 20_000) {
-        touch();
-        void loadAll();
+        touch(false);
+      } else {
+        touch(true);
+        if (hiddenAt && Date.now() - hiddenAt > 20_000) void loadAll();
       }
     };
     const onOnline = () => {
@@ -322,13 +376,13 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-    window.addEventListener("pagehide", touch);
+    window.addEventListener("pagehide", away);
     return () => {
       clearInterval(beat);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      window.removeEventListener("pagehide", touch);
+      window.removeEventListener("pagehide", away);
     };
   }, [supabase, loadAll]);
 
@@ -367,6 +421,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           media_path: draft.media_path,
           mode: draft.mode,
           ghost_seconds: draft.ghost_seconds,
+          ...(draft.duration_ms ? { duration_ms: draft.duration_ms } : {}),
         })
         .select("*")
         .single();
@@ -468,6 +523,59 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     [insertMessage, uploadMedia, roomId, boot.me.id],
   );
 
+  const sendVoice = useCallback(
+    async (rec: Recording, mode: SignalMode) => {
+      const clientId = uuid();
+      const durationMs = Math.min(61_000, Math.max(200, Math.round(rec.durationMs)));
+      const ghostSeconds = mode === "ghost" ? ghostSecondsForVoice(durationMs) : 10;
+      const preview = URL.createObjectURL(rec.blob);
+      setMessages((list) =>
+        upsertMessage(list, {
+          id: `local-${clientId}`,
+          room_id: roomId,
+          sender_id: boot.me.id,
+          client_id: clientId,
+          kind: "voice",
+          body: null,
+          sticker: null,
+          media_path: null,
+          mode,
+          ghost_seconds: ghostSeconds,
+          duration_ms: durationMs,
+          expires_at: null,
+          opened_at: null,
+          created_at: new Date().toISOString(),
+          _status: "sending",
+          _localPreview: mode === "ghost" ? undefined : preview,
+        }),
+      );
+      try {
+        if (rec.blob.size > 8 * 1024 * 1024) throw new Error("VOICE NOTE TOO LONG");
+        const type = baseMime(rec.mime);
+        const path = `${roomId}/${boot.me.id}/${uuid()}.${voiceExtension(rec.mime)}`;
+        const { error } = await supabase.storage
+          .from("signal-media")
+          .upload(path, rec.blob, { contentType: type, upsert: false, cacheControl: "0" });
+        if (error) throw error;
+        return await insertMessage({
+          client_id: clientId,
+          kind: "voice",
+          body: null,
+          sticker: null,
+          media_path: path,
+          mode,
+          ghost_seconds: ghostSeconds,
+          duration_ms: durationMs,
+          _localPreview: mode === "ghost" ? undefined : preview,
+        });
+      } catch (e) {
+        setMessages((list) => list.map((m) => (m.client_id === clientId ? { ...m, _status: "failed" } : m)));
+        throw e;
+      }
+    },
+    [supabase, insertMessage, roomId, boot.me.id],
+  );
+
   const discardFailed = useCallback((clientId: string) => {
     setMessages((list) => list.filter((m) => m.client_id !== clientId));
   }, []);
@@ -476,7 +584,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     async (clientId: string) => {
       const m = messages.find((x) => x.client_id === clientId);
       if (!m || m._status !== "failed") return;
-      if ((m.kind === "image" || m.kind === "gif") && !m.media_path) {
+      if ((m.kind === "image" || m.kind === "gif" || m.kind === "voice") && !m.media_path) {
         discardFailed(clientId);
         throw new Error("PLEASE PICK THE PHOTO AGAIN");
       }
@@ -615,13 +723,70 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
 
   /** Sends a live event to the partner over the private room channel. */
   const broadcast = useCallback(
-    (event: "tune" | "tune-ack", payload: Record<string, unknown>) => {
+    (event: "tune" | "tune-ack" | "doodle", payload: Record<string, unknown>) => {
       const ch = presenceChannel.current;
       if (!ch) return false;
       void ch.send({ type: "broadcast", event, payload: { ...payload, from: boot.me.id } });
       return true;
     },
     [boot.me.id],
+  );
+
+  const setMood = useCallback(
+    async (mood: Mood | null) => {
+      const prev = me;
+      setMe((p) => ({ ...p, mood, mood_at: mood ? new Date().toISOString() : null }));
+      const { error } = await supabase.from("profiles").update({ mood }).eq("id", boot.me.id);
+      if (error) {
+        setMe(prev);
+        throw error;
+      }
+    },
+    [supabase, me, boot.me.id],
+  );
+
+  const saveCountdown = useCallback(
+    async (at: string | null, label: string | null) => {
+      const prev = countdown;
+      setCountdown({ at, label });
+      const { error } = await supabase.rpc("set_countdown", { p_room: roomId, p_at: at, p_label: label });
+      if (error) {
+        setCountdown(prev);
+        throw error;
+      }
+    },
+    [supabase, roomId, countdown],
+  );
+
+  const answerSpark = useCallback(
+    async (answer: string) => {
+      const { error } = await supabase.from("spark_answers").insert({ room_id: roomId, answer: answer.trim().slice(0, 500) });
+      if (error) throw error;
+      // Re-read: the partner's answer becomes visible once ours exists.
+      const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
+      const [{ data }, { data: st }] = await Promise.all([
+        supabase.from("spark_answers").select("*").eq("room_id", roomId).gte("day", since).order("day", { ascending: false }),
+        supabase.rpc("spark_streak", { p_room: roomId }),
+      ]);
+      if (data) setSparks(data as SparkAnswer[]);
+      if (typeof st === "number") setStreak(st);
+    },
+    [supabase, roomId],
+  );
+
+  const newGame = useCallback(async () => {
+    const { data, error } = await supabase.rpc("ttt_new", { p_room: roomId });
+    if (error) throw error;
+    setGame(data as Game);
+  }, [supabase, roomId]);
+
+  const gameMove = useCallback(
+    async (cell: number) => {
+      const { data, error } = await supabase.rpc("ttt_move", { p_game: game?.id, p_cell: cell });
+      if (error) throw error;
+      setGame(data as Game);
+    },
+    [supabase, game?.id],
   );
 
   const saveSettings = useCallback(
@@ -672,6 +837,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       sendText,
       sendSticker,
       sendMedia,
+      sendVoice,
       retry,
       discardFailed,
       unsend,
@@ -684,11 +850,16 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       markRead,
       setTyping,
       broadcast,
+      setMood,
+      saveCountdown,
+      answerSpark,
+      newGame,
+      gameMove,
       saveSettings,
       requestMedia,
       reload: loadAll,
     }),
-    [sendText, sendSticker, sendMedia, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, markRead, setTyping, broadcast, saveSettings, requestMedia, loadAll],
+    [sendText, sendSticker, sendMedia, sendVoice, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, markRead, setTyping, broadcast, setMood, saveCountdown, answerSpark, newGame, gameMove, saveSettings, requestMedia, loadAll],
   );
 
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);
@@ -711,6 +882,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     settings,
     presence,
     mediaUrls,
+    sparks,
+    streak,
+    game,
+    countdown,
     partnerLastReadAt: partnerMember?.last_read_at,
     unread,
     actions,

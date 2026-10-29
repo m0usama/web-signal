@@ -29,8 +29,12 @@ export async function enterApp(page: Page) {
   await expect(page.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
 }
 
-export async function openTab(page: Page, name: "MAP" | "COMMS" | "SIGNALS" | "PROFILE") {
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: new RegExp(name) }).click();
+export async function openTab(page: Page, name: "MAP" | "COMMS" | "SIGNALS" | "PLAY" | "PROFILE") {
+  const label = name === "PROFILE" ? "ME" : name;
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("button", { name: new RegExp(`(^|\\s)${label}(\\s|$)`) })
+    .click();
 }
 
 /** A tiny valid PNG (4x4 magenta), generated in memory. */

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { LOGO } from "@/lib/pixels";
 import type { Connection } from "@/lib/useRoom";
-import type { Profile } from "@/lib/types";
+import type { Countdown, Profile } from "@/lib/types";
+import { countdownText, moodInfo } from "@/lib/spark";
 import { PixelArt } from "./PixelArt";
 
 export function Header({
@@ -15,7 +16,11 @@ export function Header({
   soundOn,
   onLogoTap,
   onEnableSound,
+  countdown,
+  streak,
 }: {
+  countdown?: Countdown;
+  streak?: number;
   me: Profile;
   partner: Profile;
   partnerOnline: boolean;
@@ -26,12 +31,16 @@ export function Header({
   onEnableSound: () => void;
 }) {
   const [clock, setClock] = useState("");
+  const [meet, setMeet] = useState<string | null>(null);
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    const tick = () => {
+      setClock(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setMeet(countdownText(countdown?.at));
+    };
     tick();
     const t = setInterval(tick, 15_000);
     return () => clearInterval(t);
-  }, []);
+  }, [countdown?.at]);
 
   const status =
     connection === "live" ? "LINK OK" : connection === "connecting" ? "LINKING…" : connection === "offline" ? "NO SIGNAL" : "RELINKING…";
@@ -44,16 +53,25 @@ export function Header({
       <div className="lcd header-lcd">
         <div className="lcd-row">
           <span className="lcd-title">WEB//SIGNAL</span>
-          <span className={`lcd-status conn-${connection}`}>{status}</span>
+          <span className={`lcd-status conn-${connection}`}>
+            {streak ? <span className="lcd-streak">🔥{streak} </span> : null}
+            {status}
+          </span>
         </div>
         <div className="lcd-row small">
           <span>
-            <span className="dot on" /> {me.display_name}
+            <span className="dot on" /> {me.display_name} {moodInfo(me.mood)?.emoji}
           </span>
           <span>
-            <span className={`dot ${partnerOnline ? "on" : "off"}`} /> {partner.display_name}
+            <span className={`dot ${partnerOnline ? "on" : "off"}`} /> {partner.display_name} {moodInfo(partner.mood)?.emoji}
           </span>
-          <span className="lcd-clock">{clock}</span>
+          {meet ? (
+            <span className="lcd-meet" title={countdown?.label ?? "Next meet-up"}>
+              ♥{meet}
+            </span>
+          ) : (
+            <span className="lcd-clock">{clock}</span>
+          )}
         </div>
       </div>
       <div className="header-side">

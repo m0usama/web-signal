@@ -7,6 +7,7 @@ import { STICKERS } from "@/lib/pixels";
 import type { Message, Profile, Reaction, SignalMode } from "@/lib/types";
 import type { PartnerPresence, Room } from "@/lib/useRoom";
 import { Icon } from "./Icon";
+import { TalkButton, VoiceNote } from "./Voice";
 
 const REACTIONS = ["💜", "😂", "😮", "🥺", "🔥", "👍"];
 const QUICK_EMOJI = ["💜", "🕸️", "⚡", "🌙", "✨", "😘", "🥹", "😂", "🫶", "🦇", "🌃", "☕"];
@@ -253,7 +254,7 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
             value={text}
             maxLength={1000}
             disabled={mode === "ghost"}
-            placeholder={mode === "ghost" ? "PICK A PHOTO ▸" : "SAY HI…"}
+            placeholder={mode === "ghost" ? "PHOTO OR HOLD TO TALK ▸" : "SAY HI…"}
             onChange={(e) => {
               setText(e.target.value);
               actions.setTyping(e.target.value.length > 0);
@@ -267,9 +268,23 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
             }}
             aria-label="Message"
           />
-          <button type="button" className="btn btn-coral send-btn" onClick={send} disabled={!text.trim() || mode === "ghost"}>
-            SEND
-          </button>
+          {text.trim() && mode !== "ghost" ? (
+            <button type="button" className="btn btn-coral send-btn" onClick={send}>
+              SEND
+            </button>
+          ) : (
+            <TalkButton
+              onRecorded={async (rec) => {
+                try {
+                  await actions.sendVoice(rec, mode);
+                  onSent();
+                } catch (e) {
+                  onToast(e instanceof Error && /^[A-Z0-9 ().,'—-]+$/.test(e.message) ? e.message : friendlyError(e), "warn");
+                }
+              }}
+              onProblem={(msg) => onToast(msg, "warn")}
+            />
+          )}
         </div>
       </div>
 
@@ -323,7 +338,10 @@ const MessageItem = memo(function MessageItem(props: {
             <Icon name={m.sticker} size={64} title={`${m.sticker} sticker`} />
           </span>
         )}
-        {(m.kind === "image" || m.kind === "gif") && m.mode === "ghost" && (
+        {m.kind === "voice" && m.mode !== "ghost" && (
+          <VoiceNote m={m} url={m._localPreview ?? props.mediaUrl?.url} exp={props.mediaUrl?.exp} onNeed={props.onNeedMedia} />
+        )}
+        {(m.kind === "image" || m.kind === "gif" || m.kind === "voice") && m.mode === "ghost" && (
           <GhostCard m={m} mine={mine} onOpen={props.onOpenGhost} />
         )}
         {(m.kind === "image" || m.kind === "gif") && m.mode !== "ghost" && (
@@ -378,7 +396,7 @@ function GhostCard({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: () 
       <div className="ghost-card">
         <Icon name="ghost" size={28} />
         <div>
-          <strong>GHOST {m.kind === "gif" ? "GIF" : "PHOTO"} SENT</strong>
+          <strong>GHOST {m.kind === "gif" ? "GIF" : m.kind === "voice" ? "VOICE" : "PHOTO"} SENT</strong>
           <span>{m.opened_at ? "OPENED · FADING" : m._status ? "UPLOADING…" : `UNOPENED · ${m.ghost_seconds}s VIEW`}</span>
         </div>
       </div>
@@ -388,8 +406,8 @@ function GhostCard({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: () 
     <button type="button" className="ghost-card ghost-open" onClick={onOpen} disabled={!!m.opened_at}>
       <Icon name="ghost" size={28} />
       <div>
-        <strong>{m.opened_at ? "VIEWING…" : "TAP TO REVEAL"}</strong>
-        <span>VANISHES {m.ghost_seconds}s AFTER OPENING</span>
+        <strong>{m.opened_at ? (m.kind === "voice" ? "PLAYING…" : "VIEWING…") : m.kind === "voice" ? "TAP TO HEAR" : "TAP TO REVEAL"}</strong>
+        <span>{m.kind === "voice" ? "GHOST VOICE · PLAYS ONCE" : `VANISHES ${m.ghost_seconds}s AFTER OPENING`}</span>
       </div>
     </button>
   );

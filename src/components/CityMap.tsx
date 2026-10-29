@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { buildingAt, CITY_H, CITY_W, clampView, fitView, generateCity, zoomAt, type Building, type View } from "@/lib/city";
 import { formatLastSeen } from "@/lib/expiry";
+import { moodInfo } from "@/lib/spark";
 import type { Profile, SignalDrop } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { CitySvg } from "./CitySvg";
@@ -310,6 +311,11 @@ export function CityMap(props: Props) {
                     </div>
                   )}
                   {!isMe && props.partnerTyping && !bubble && <div className="speech typing">…</div>}
+                  {!bubble && !(!isMe && props.partnerTyping) && moodInfo(p.mood) && (
+                    <div className="mood-bubble" title={moodInfo(p.mood)!.label}>
+                      {moodInfo(p.mood)!.emoji}
+                    </div>
+                  )}
                   <div className="pin-art">
                     <Avatar avatarKey={p.avatar_key} size={44} label={p.display_name} />
                   </div>

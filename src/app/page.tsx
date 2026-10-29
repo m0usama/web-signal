@@ -13,10 +13,10 @@ export default async function Home() {
   if (!user) redirect("/login");
 
   const [{ data: profiles }, { data: members }, { data: settings }, { data: rooms }] = await Promise.all([
-    supabase.from("profiles").select("id,display_name,avatar_key,map_x,map_y,last_seen_at"),
+    supabase.from("profiles").select("id,display_name,avatar_key,map_x,map_y,last_seen_at,mood,mood_at"),
     supabase.from("room_members").select("room_id,user_id,last_read_at"),
     supabase.from("user_settings").select("user_id,sound_on,volume,theme,reduced_fx").eq("user_id", user.id).maybeSingle(),
-    supabase.from("private_rooms").select("id,created_at").limit(1),
+    supabase.from("private_rooms").select("id,created_at,next_meet_at,next_meet_label").limit(1),
   ]);
 
   const me = (profiles as Profile[] | null)?.find((p) => p.id === user.id);
@@ -45,6 +45,7 @@ export default async function Home() {
   const boot: Bootstrap = {
     roomId: room.id,
     roomCreatedAt: room.created_at,
+    countdown: { at: room.next_meet_at ?? null, label: room.next_meet_label ?? null },
     me,
     partner,
     members: (members as RoomMember[]) ?? [],

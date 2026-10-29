@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { disablePush, enablePush, pushState, type PushState } from "@/lib/push-client";
 import { synth } from "@/lib/sound";
 import { MIN_PASSWORD } from "@/lib/username";
 import { BADGES } from "@/lib/pixels";
@@ -17,7 +19,9 @@ export function ProfilePanel({
   onSave,
   onRename,
   onChangePassword,
+  supabase,
 }: {
+  supabase: SupabaseClient;
   me: ProfileT;
   settings: Settings;
   badges: Badge[];
@@ -31,6 +35,15 @@ export function ProfilePanel({
   const [pw, setPw] = useState("");
   const [pwMsg, setPwMsg] = useState("");
   const mine = badges.filter((b) => b.user_id === me.id);
+  const [push, setPush] = useState<PushState | "busy">("busy");
+  const [pushMsg, setPushMsg] = useState("");
+  useEffect(() => {
+    let alive = true;
+    void pushState().then((st) => alive && setPush(st));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <section className="panel-scroll profile" aria-label="Profile and settings">
@@ -93,7 +106,40 @@ export function ProfilePanel({
           </button>
         ))}
       </div>
-      <p className="fine">Sounds play while the app is open. Background push notifications are not set up yet.</p>
+      <p className="fine">Sounds play while the app is open; turn on notifications below for when it&apos;s closed.</p>
+
+      <h2 className="panel-title">NOTIFICATIONS</h2>
+      {push === "needs-install" && (
+        <p className="fine">
+          On iPhone, notifications only work from the home-screen app: tap Share → <strong>Add to Home Screen</strong>, open WEB//SIGNAL from
+          there, then come back here.
+        </p>
+      )}
+      {push === "unsupported" && <p className="fine">This browser can&apos;t receive notifications.</p>}
+      {push === "blocked" && <p className="fine">Notifications are blocked. Allow them for this site in your phone&apos;s settings, then try again.</p>}
+      {(push === "off" || push === "on" || push === "busy") && (
+        <button
+          type="button"
+          className={`btn ${push === "on" ? "btn-ghost" : "btn-green"} wide`}
+          disabled={push === "busy"}
+          onClick={async () => {
+            setPush("busy");
+            setPushMsg("");
+            try {
+              const next = push === "on" ? await disablePush(supabase) : await enablePush(supabase);
+              setPush(next);
+              if (next === "on") setPushMsg("YOU'LL GET POKES, SIGNALS AND TUNES EVEN WHEN THE APP IS CLOSED");
+            } catch (e) {
+              setPush(await pushState());
+              setPushMsg(e instanceof Error ? e.message : "COULDN'T TURN ON NOTIFICATIONS");
+            }
+          }}
+        >
+          {push === "on" ? "🔕 TURN OFF NOTIFICATIONS" : push === "busy" ? "…" : "🔔 TURN ON NOTIFICATIONS"}
+        </button>
+      )}
+      {pushMsg && <p className="fine">{pushMsg}</p>}
+      <p className="fine">Notifications never show message contents on your lock screen.</p>
 
       <h2 className="panel-title">DISPLAY</h2>
       <div className="seg wide" role="radiogroup" aria-label="Theme">

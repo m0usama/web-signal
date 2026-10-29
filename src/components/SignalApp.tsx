@@ -18,8 +18,13 @@ import { Reveal, type RevealTarget } from "./Reveal";
 import { Secret } from "./Secret";
 import { Signals } from "./Signals";
 import { Toasts, type Toast } from "./Toasts";
+import { CountdownEditor, MoodPicker, SparkCard } from "./Extras";
+import { Doodle, TicTacToe, type DoodleBus } from "./Play";
+import type { DoodleEvent } from "@/lib/useRoom";
 import { Equaliser, TuneButton, type TuneStatus } from "./TuneButton";
 import { playTuneOnce } from "@/lib/tune";
+import { primeRadio } from "@/lib/radio";
+import { registerServiceWorker } from "@/lib/push-client";
 
 const INTRO_KEY = "ws-intro-seen";
 const SOUND_PROMPT_KEY = "ws-sound-prompt";
@@ -87,6 +92,24 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   // Handlers passed into useRoom run later; these refs give them the latest values.
   const roomRef = useRef<Room | null>(null);
   const enableSoundRef = useRef<() => void>(() => {});
+  // Live doodle: shared log + listeners (kept here so the drawing survives tab switches).
+  const [doodleBus] = useState<DoodleBus & { emit: (e: DoodleEvent) => void }>(() => {
+    const log: DoodleEvent[] = [];
+    const listeners = new Set<(e: DoodleEvent) => void>();
+    return {
+      log,
+      subscribe: (fn) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+      send: (e) => roomRef.current?.actions.broadcast("doodle", e as unknown as Record<string, unknown>),
+      emit: (e) => {
+        log.push(e);
+        if (log.length > 3000) log.splice(0, 1000);
+        listeners.forEach((fn) => fn(e));
+      },
+    };
+  });
   const hour = useHour();
 
   // ------------------------------------------------------------------ toasts & effects
@@ -179,6 +202,20 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
       onDropOpened: () => {
         toast({ text: `${boot.partner.display_name} OPENED YOUR DROP`, icon: "moon" });
       },
+      onDoodle: (e) => doodleBus.emit(e),
+      onSpark: () => {
+        alert("message");
+        toast({ text: `${boot.partner.display_name} ANSWERED TODAY'S SPARK ✨`, icon: "sparkle", action: { label: "SEE", run: () => setTab("signals") } });
+      },
+      onGame: (g) => {
+        if (g.winner === "void") return;
+        if (g.turn === boot.me.id && tabRef.current !== "play") {
+          alert("poke");
+          toast({ text: "YOUR MOVE ON THE ROOFTOP 🎮", icon: "star", action: { label: "PLAY", run: () => setTab("play") } });
+        } else if (g.winner && g.winner !== "draw" && tabRef.current !== "play") {
+          toast({ text: "ROOFTOP GAME OVER — SEE WHO WON", icon: "star", action: { label: "SEE", run: () => setTab("play") } });
+        }
+      },
       onBadge: (b) => {
         if (b.user_id !== boot.me.id) return;
         synth.play("badge");
@@ -268,6 +305,11 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
     document.title = room.unread > 0 ? `(${room.unread}) WEB//SIGNAL` : "WEB//SIGNAL";
   }, [room.unread]);
 
+  // Service worker: lets notifications open the app (and receive pushes).
+  useEffect(() => {
+    void registerServiceWorker();
+  }, []);
+
   // Pause decorative animation while the page is hidden.
   useEffect(() => {
     const onVis = () => document.documentElement.classList.toggle("page-hidden", document.visibilityState === "hidden");
@@ -351,8 +393,12 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
     if (tuneTimer.current) clearTimeout(tuneTimer.current);
     tuneTimer.current = setTimeout(() => {
       setTuneOut(null);
+      // Let them know with a notification instead.
+      void fetch("/api/push/tune", { method: "POST" }).catch(() => {});
       toast({
-        text: room.presence.online ? "NO ANSWER — THE TUNE DIDN'T REACH THEM" : `${room.partner.display_name} ISN'T ONLINE — THE TUNE ONLY PLAYS LIVE`,
+        text: room.presence.online
+          ? "NO ANSWER — SENT THEM A NOTIFICATION INSTEAD"
+          : `${room.partner.display_name} ISN'T ONLINE — SENT A NOTIFICATION INSTEAD`,
         tone: "warn",
       });
     }, 10_000);
@@ -390,10 +436,12 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   // ------------------------------------------------------------------ render
   const reduced = prefersReduced || room.settings.reduced_fx;
   const night = room.settings.theme === "night" || (room.settings.theme === "auto" && (hour < 7 || hour >= 19));
+  // Golden-hour glow around the switch (auto theme only): 6–7am sunrise, 6–7pm sunset.
+  const dusk = room.settings.theme === "auto" && (hour === 6 || hour === 18);
   const newDrops = room.drops.filter((d) => d.sender_id !== boot.me.id && !d.opened_at).length;
 
   return (
-    <div className={`app-shell ${night ? "theme-night" : "theme-day"} ${reduced ? "reduced" : ""} tab-${tab} ${flash ? "flash" : ""} ${introDone && soundPrompt && !soundUnlocked ? "has-sound-prompt" : ""}`}>
+    <div className={`app-shell ${night ? "theme-night" : "theme-day"} ${dusk ? (hour === 6 ? "theme-dawn" : "theme-dusk") : ""} ${reduced ? "reduced" : ""} tab-${tab} ${flash ? "flash" : ""} ${introDone && soundPrompt && !soundUnlocked ? "has-sound-prompt" : ""}`}>
       <div className="crt" aria-hidden />
 
       <Header
@@ -405,6 +453,8 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
         soundOn={soundUnlocked && room.settings.sound_on}
         onLogoTap={onLogoTap}
         onEnableSound={enableSound}
+        countdown={room.countdown}
+        streak={room.streak}
       />
 
       {(room.connection === "offline" || room.connection === "reconnecting") && (
@@ -470,13 +520,34 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
                 partner={room.partner}
                 presence={room.presence}
                 active={tab === "comms"}
-                onOpenGhost={(m) => setReveal({ type: "message", id: m.id, fromName: room.partner.display_name, mine: false })}
+                onOpenGhost={(m) => {
+                  if (m.kind === "voice") primeRadio();
+                  setReveal({ type: "message", id: m.id, fromName: room.partner.display_name, mine: false });
+                }}
                 onToast={(text, tone) => toast({ text, tone })}
                 onSent={() => synth.play("send")}
               />
             )}
             {tab === "signals" && (
               <Signals
+                top={
+                  <>
+                    <SparkCard
+                      me={room.me}
+                      partner={room.partner}
+                      answers={room.sparks}
+                      streak={room.streak}
+                      onAnswer={(t) => room.actions.answerSpark(t)}
+                    />
+                    <h2 className="panel-title">YOUR STATUS</h2>
+                    <MoodPicker
+                      current={room.me.mood}
+                      onPick={(m) => room.actions.setMood(m).catch((e) => toast({ text: friendlyError(e), tone: "warn" }))}
+                    />
+                    <h2 className="panel-title">NEXT MEET-UP</h2>
+                    <CountdownEditor value={room.countdown} onSave={(at, label) => room.actions.saveCountdown(at, label)} />
+                  </>
+                }
                 tune={<TuneButton status={tuneOut?.status ?? "idle"} onPress={sendTune} partnerName={room.partner.display_name} wide />}
                 me={room.me}
                 partner={room.partner}
@@ -503,6 +574,29 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
                 }}
               />
             )}
+            {tab === "play" && (
+              <section className="panel-scroll play" aria-label="Play">
+                <TicTacToe
+                  game={room.game}
+                  me={room.me}
+                  partner={room.partner}
+                  onNew={() => room.actions.newGame()}
+                  onMove={(c) => room.actions.gameMove(c)}
+                />
+                <Doodle
+                  bus={doodleBus}
+                  partnerName={room.partner.display_name}
+                  onSendImage={async (file) => {
+                    try {
+                      await room.actions.sendMedia(file, "normal", 10);
+                      toast({ text: "DOODLE SENT TO THE CHAT", icon: "sparkle" });
+                    } catch (e) {
+                      toast({ text: friendlyError(e), tone: "warn" });
+                    }
+                  }}
+                />
+              </section>
+            )}
             {tab === "profile" && (
               <ProfilePanel
                 me={room.me}
@@ -520,6 +614,7 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
                   }
                 }}
                 onChangePassword={changePassword}
+                supabase={room.supabase}
               />
             )}
           </div>
@@ -532,7 +627,8 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
             ["map", "MAP", "◉"],
             ["comms", "COMMS", "✉"],
             ["signals", "SIGNALS", "⚡"],
-            ["profile", "PROFILE", "☺"],
+            ["play", "PLAY", "✦"],
+            ["profile", "ME", "☺"],
           ] as const
         ).map(([key, label, glyph]) => (
           <button
@@ -554,6 +650,9 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
             <span>{label}</span>
             {key === "comms" && room.unread > 0 && tab !== "comms" && <span className="nav-badge">{room.unread > 9 ? "9+" : room.unread}</span>}
             {key === "signals" && newDrops > 0 && tab !== "signals" && <span className="nav-badge">{newDrops}</span>}
+            {key === "play" && room.game && !room.game.winner && room.game.turn === boot.me.id && tab !== "play" && (
+              <span className="nav-badge">!</span>
+            )}
           </button>
         ))}
       </nav>

@@ -1,9 +1,11 @@
 export type AvatarKey = "a" | "b";
 export type SignalMode = "normal" | "day" | "ghost";
-export type MessageKind = "text" | "image" | "gif" | "sticker";
+export type MessageKind = "text" | "image" | "gif" | "sticker" | "voice";
 export type PokeKind = "heart" | "spider" | "zap" | "star" | "hug" | "web" | "fingerheart";
 export type Theme = "auto" | "day" | "night";
-export type Tab = "map" | "comms" | "signals" | "profile";
+export type Tab = "map" | "comms" | "signals" | "play" | "profile";
+
+export type Mood = "happy" | "love" | "missing" | "sleepy" | "busy" | "study" | "work" | "food" | "gaming" | "sad" | "travel" | "party";
 
 export interface Profile {
   id: string;
@@ -12,6 +14,34 @@ export interface Profile {
   map_x: number;
   map_y: number;
   last_seen_at: string | null;
+  mood?: Mood | null;
+  mood_at?: string | null;
+}
+
+export interface SparkAnswer {
+  room_id: string;
+  day: string;
+  user_id: string;
+  answer: string;
+  created_at: string;
+}
+
+export interface Game {
+  id: string;
+  room_id: string;
+  kind: "ttt";
+  board: string;
+  x_player: string;
+  o_player: string;
+  turn: string | null;
+  winner: "X" | "O" | "draw" | "void" | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Countdown {
+  at: string | null;
+  label: string | null;
 }
 
 export interface Message {
@@ -28,6 +58,7 @@ export interface Message {
   expires_at: string | null;
   opened_at: string | null;
   created_at: string;
+  duration_ms?: number | null;
   /** Client-only state for optimistic sends. */
   _status?: "sending" | "failed";
   _localPreview?: string;
@@ -89,6 +120,7 @@ export interface RoomMember {
 export interface Bootstrap {
   roomId: string;
   roomCreatedAt: string;
+  countdown?: Countdown;
   me: Profile;
   partner: Profile;
   settings: Settings;

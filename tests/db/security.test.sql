@@ -250,5 +250,106 @@ select t.ok((select (public.cleanup_expired() ->> 'messages')::int = 2), 'cleanu
 select t.ok((select count(*) = 0 from public.signal_drops), 'cleanup deletes the expired drop');
 select t.ok((select count(*) = 2 from public.media_trash), 'expired media is queued for storage deletion');
 
+-- ================================================================== v2 features
+-- (skipped automatically if the v2 migration isn't applied)
+do $v2$ begin
+  if to_regclass('public.spark_answers') is null then raise notice 'skip - v2 not applied'; end if;
+end $v2$;
+
+-- moods
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+update public.profiles set mood = 'love' where id = auth.uid();
+select t.ok((select mood = 'love' and mood_at is not null from public.profiles where id = auth.uid()), 'A can set a mood (time recorded)');
+select t.throws($$update public.profiles set mood = 'evil' where id = auth.uid()$$, 'check constraint', 'unknown moods are rejected');
+update public.profiles set mood = 'sad' where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+select t.throws($$update public.profiles set mood_at = now() where id = auth.uid()$$, 'permission denied', 'mood time is server-set');
+select public.touch_presence(true);
+select t.ok((select foreground from public.profiles where id = auth.uid()), 'foreground heartbeat recorded');
+
+-- countdown
+select public.set_countdown((select v::uuid from ctx where k = 'room'), now() + interval '3 days', 'Saturday picnic');
+select t.ok((select next_meet_label = 'Saturday picnic' from public.private_rooms), 'members can set the meet-up countdown');
+select t.throws($$select public.set_countdown((select v::uuid from ctx where k='room'), now() - interval '5 days', 'x')$$,
+  'COUNTDOWN_IN_PAST', 'countdown cannot be far in the past');
+
+-- voice notes
+insert into storage.objects (bucket_id, name, owner_id)
+values ('signal-media', (select v from ctx where k = 'room') || '/aaaaaaaa-0000-0000-0000-000000000001/v1.m4a', auth.uid()::text);
+insert into public.messages (room_id, client_id, kind, media_path, mode, duration_ms)
+values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'voice',
+        (select v from ctx where k = 'room') || '/aaaaaaaa-0000-0000-0000-000000000001/v1.m4a', 'ghost', 4200);
+select t.ok((select count(*) = 1 from public.messages where kind = 'voice' and mode = 'ghost'), 'ghost voice notes are allowed');
+select t.throws($$insert into public.messages (room_id, client_id, kind, mode) values ((select v::uuid from ctx where k='room'), gen_random_uuid(), 'voice', 'normal')$$,
+  'check constraint', 'voice notes need an audio file');
+
+-- daily spark: hidden until you answer too
+insert into public.spark_answers (room_id, answer) values ((select v::uuid from ctx where k = 'room'), 'pizza on a roof');
+select t.ok((select day = public.spark_today() from public.spark_answers), 'spark day is set by the server');
+select t.throws($$insert into public.spark_answers (room_id, answer) values ((select v::uuid from ctx where k='room'), 'again')$$,
+  'duplicate', 'one answer per person per day');
+reset role;
+
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+select t.ok((select mood is null from public.profiles where id = auth.uid()), 'A could not change B''s mood');
+select t.ok((select count(*) = 0 from public.spark_answers), 'partner''s spark answer stays hidden until you answer');
+insert into public.spark_answers (room_id, answer) values ((select v::uuid from ctx where k = 'room'), 'sunset walk');
+select t.ok((select count(*) = 2 from public.spark_answers), 'both answers revealed once both answered');
+reset role;
+
+-- streak: pretend both answered the 3 days before today as well
+select t.as_user(null);
+insert into public.spark_answers (room_id, day, user_id, answer)
+select (select v::uuid from ctx where k = 'room'), public.spark_today() - d, u, 'x'
+from generate_series(1, 3) d, (values ('aaaaaaaa-0000-0000-0000-000000000001'::uuid), ('bbbbbbbb-0000-0000-0000-000000000002'::uuid)) us(u);
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+select t.ok((select public.spark_streak((select v::uuid from ctx where k = 'room')) = 4), 'streak counts consecutive days both answered');
+
+-- tic-tac-toe
+insert into ctx select 'game', (public.ttt_new((select v::uuid from ctx where k = 'room'))).id::text;
+select public.ttt_move((select v::uuid from ctx where k = 'game'), 0);
+select t.throws($$select public.ttt_move((select v::uuid from ctx where k='game'), 1)$$, 'NOT_YOUR_TURN', 'cannot move twice in a row');
+reset role;
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+select t.throws($$select public.ttt_move((select v::uuid from ctx where k='game'), 0)$$, 'BAD_MOVE', 'cannot take an occupied square');
+select public.ttt_move((select v::uuid from ctx where k = 'game'), 3);
+reset role;
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+select public.ttt_move((select v::uuid from ctx where k = 'game'), 1);
+reset role;
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+select public.ttt_move((select v::uuid from ctx where k = 'game'), 4);
+reset role;
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+select t.ok((select (public.ttt_move((select v::uuid from ctx where k = 'game'), 2)).winner = 'X'), 'three in a row wins');
+select t.ok((select count(*) = 1 from public.badges where badge_key = 'rooftop_champ' and user_id = auth.uid()), 'winner earns rooftop_champ');
+select t.throws($$select public.ttt_move((select v::uuid from ctx where k='game'), 8)$$, 'GAME_OVER', 'no moves after the game ends');
+select t.throws($$update public.games set winner = 'O'$$, 'permission denied', 'games cannot be edited directly');
+
+-- push subscriptions
+select public.save_push_subscription('https://push.example/abc', 'key', 'auth', 'test');
+select t.ok((select count(*) = 1 from public.push_subscriptions), 'A can save a push subscription');
+select t.throws($$select public.save_push_subscription('http://insecure/x', 'k', 'a', 'ua')$$, 'BAD_ENDPOINT', 'push endpoints must be https');
+select t.throws($$select * from private.config$$, 'permission denied', 'server push config is not readable');
+reset role;
+select t.as_user('bbbbbbbb-0000-0000-0000-000000000002');
+set local role authenticated;
+select t.ok((select count(*) = 0 from public.push_subscriptions), 'B cannot see A''s devices');
+reset role;
+
+select t.as_user('cccccccc-0000-0000-0000-000000000003');
+set local role authenticated;
+select t.ok((select count(*) = 0 from public.games), 'outsider sees no games');
+select t.ok((select count(*) = 0 from public.spark_answers), 'outsider sees no spark answers');
+select t.throws($$select public.ttt_new((select v::uuid from ctx where k='room'))$$, 'NOT_FOUND', 'outsider cannot start a game');
+select t.throws($$select public.set_countdown((select v::uuid from ctx where k='room'), now(), 'x')$$, 'NOT_FOUND', 'outsider cannot set the countdown');
+reset role;
+
 rollback;
 \echo 'ALL DATABASE SECURITY TESTS PASSED'
