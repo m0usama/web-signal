@@ -18,6 +18,7 @@ A private pixel-art communicator for exactly two people. A fictional night city 
 | **Ghost signals** | Photo/GIF only. The receiver's first open is recorded by the server, starts a 5–30s countdown, then the media can never be fetched again. Unopened ghosts expire after 24h. |
 | **Signal drops** | Leave a note, sticker, photo or GIF on a rooftop. The other person sees a glowing marker and opens it in a comic-book reveal. |
 | **Pokes** | Heart, finger heart, hug, zap, star, tingle, web shot — they fly across the map. Hearts sent within 10 seconds of each other trigger **Heart Sync**. |
+| **Our tune** | Press **♪ TUNE** (map or Signals). It plays once on the other phone, live; your button shows a pixel equaliser while it's playing there and stops when it ends. If their sound is off they get a note instead. |
 | **Sound** | Original chiptune alerts made in code (Web Audio). Different sounds for messages, pokes, drops and ghosts. When sound is off the screen flashes instead. |
 | **Secrets** | Tap the logo three times. Tap rooftops and water towers. Read the bottom-left corner of the river. |
 | **Badges** | Awarded by the database (first signal, heart sync, night owl, finder…). |
@@ -41,6 +42,7 @@ Round portraits, 256×256 PNG with transparent corners. Replace the files to cha
 2. **Authentication → Sign In / Providers → Email:** turn **off** "Allow new users to sign up".
 3. **SQL Editor → New query:** paste the whole of `supabase/migrations/20261028000000_web_signal.sql` and click **Run**.
    This creates every table, security rule, the private `signal-media` bucket, realtime settings and the cleanup job.
+   Then do the same with `supabase/migrations/20261029000000_tunes.sql` (the private bucket for your tune).
 4. **Database → Extensions:** make sure **pg_cron** is enabled (the migration tries to enable it). If you enable it after running the SQL, run this once:
    ```sql
    select cron.schedule('web-signal-cleanup', '*/10 * * * *', 'select public.cleanup_expired()');
@@ -71,7 +73,11 @@ Round portraits, 256×256 PNG with transparent corners. Replace the files to cha
 3. **Deploy.** Every push to `main` redeploys automatically.
 4. Back in Supabase: **Authentication → URL Configuration** → set **Site URL** to your Vercel URL (needed for invitation and password-reset links).
 
-### 4. On the phones
+### 4. Your tune (optional)
+
+**Storage → signal-tunes → Upload file**, and name it exactly `tune.mp3` (max 5 MB). It stays in private storage and is never in this code repo; the app fetches it with a short-lived link. Without it, the button plays a built-in chiptune.
+
+### 5. On the phones
 
 Open the site in Safari → Share → **Add to Home Screen**. Log in, tap **ENABLE SIGNAL SOUND** once per visit (browsers require a tap before playing sound).
 
@@ -109,6 +115,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs all of the above on every push 
 
 ## Known limitations
 
+- The tune only plays if the other person has the app open with sound enabled (browsers block sound until you tap once per visit).
 - Alerts play while the app is open (including in a background tab on desktop). Push notifications to a locked phone are not built yet; they need a service worker and iOS 16.4+ home-screen install.
 - Vercel's free plan runs the Storage cleanup once a day; expired files are unreachable immediately but take up to a day to be physically deleted.
 - Supabase's free plan pauses projects after a week with no activity; opening the app regularly keeps it awake.
