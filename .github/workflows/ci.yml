@@ -18,9 +18,9 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -28,23 +28,23 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Typecheck
-        run: npm run typecheck
+        run: scripts/ci-run.sh typecheck npm run typecheck
 
       - name: Lint
-        run: npm run lint
+        run: scripts/ci-run.sh lint npm run lint
 
       - name: Unit tests
-        run: npm test
+        run: scripts/ci-run.sh unit npm test
 
       - uses: supabase/setup-cli@v1
         with:
           version: latest
 
       - name: Start local Supabase (applies migrations)
-        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
+        run: scripts/ci-run.sh supabase-start supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
 
       - name: Database security tests
-        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f tests/db/security.test.sql
+        run: scripts/ci-run.sh db-tests psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f tests/db/security.test.sql
 
       - name: Export local Supabase keys
         run: |
@@ -55,7 +55,7 @@ jobs:
           echo "CRON_SECRET=ci-secret" >> $GITHUB_ENV
 
       - name: Production build
-        run: npm run build
+        run: scripts/ci-run.sh build npm run build
 
       - name: Seed two test accounts and pair them
         run: |
@@ -67,14 +67,14 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: End-to-end tests
-        run: npx playwright test
+        run: scripts/ci-run.sh e2e npx playwright test --reporter=line
 
       - name: Cleanup job works against real Storage
         run: |
           npm run start -- -p 3100 & sleep 8
           curl -fsS -H "Authorization: Bearer ci-secret" http://localhost:3100/api/cleanup
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: playwright-report
