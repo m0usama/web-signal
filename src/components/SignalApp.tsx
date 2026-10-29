@@ -381,8 +381,8 @@ export function SignalApp({
       return g.turn === me ? { tone: "turn", text: "YOUR MOVE" } : { tone: "wait", text: "THEIR MOVE" };
     };
     const dailyStatus = (kind: "trivia" | "tot"): QuestStatus => {
-      const mine = quests.daily.some((d) => d.kind === kind && d.user_id === me && d.day === quests.today);
-      const theirs = quests.daily.some((d) => d.kind === kind && d.user_id !== me && d.day === quests.today);
+      const mine = quests.progress.some((d) => d.kind === kind && d.user_id === me && d.day === quests.today);
+      const theirs = quests.progress.some((d) => d.kind === kind && d.user_id !== me && d.day === quests.today);
       if (!mine) return theirs ? { tone: "turn", text: "YOUR TURN" } : { tone: "new", text: "NEW TODAY" };
       return theirs ? { tone: "done", text: "SEE RESULTS" } : { tone: "wait", text: "WAITING" };
     };
@@ -1000,6 +1000,7 @@ export function SignalApp({
             <Trivia
               day={quests.today}
               daily={quests.daily}
+              partnerDone={quests.progress.some((d) => d.kind === "trivia" && d.user_id === room.partner.id && d.day === quests.today)}
               me={room.me}
               partner={room.partner}
               onSubmit={(answers, score) => quests.actions.answerDaily("trivia", answers, score)}
@@ -1009,6 +1010,7 @@ export function SignalApp({
             <ThisOrThat
               day={quests.today}
               daily={quests.daily}
+              partnerDone={quests.progress.some((d) => d.kind === "tot" && d.user_id === room.partner.id && d.day === quests.today)}
               me={room.me}
               partner={room.partner}
               onSubmit={(answers) => quests.actions.answerDaily("tot", answers, 0)}

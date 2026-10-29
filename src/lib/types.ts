@@ -172,3 +172,10 @@ export interface HeroScore {
   user_id: string;
   points: number;
 }
+
+export interface DailyProgress {
+  room_id: string;
+  day: string;
+  kind: "trivia" | "tot";
+  user_id: string;
+}

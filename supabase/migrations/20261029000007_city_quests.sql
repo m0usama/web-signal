@@ -394,6 +394,21 @@ create policy daily_select on public.daily_answers for select to authenticated
 create policy daily_insert on public.daily_answers for insert to authenticated
   with check (public.is_room_member(room_id) and user_id = auth.uid());
 
+-- Who has played today (no answers, just "done") — readable by both, so the
+-- landmark can say YOUR TURN and the other phone gets a live update.
+create table if not exists public.daily_progress (
+  room_id     uuid not null references public.private_rooms (id) on delete cascade,
+  day         date not null,
+  kind        text not null check (kind in ('trivia', 'tot')),
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (room_id, day, kind, user_id)
+);
+alter table public.daily_progress enable row level security;
+revoke all on public.daily_progress from anon, authenticated;
+grant select on public.daily_progress to authenticated;
+create policy daily_progress_select on public.daily_progress for select to authenticated using (public.is_room_member(room_id));
+
 -- Points: trivia = your score; This or That = 1 point each per 2 matching picks (once both answered).
 create or replace function public.daily_after_insert()
 returns trigger language plpgsql security definer set search_path = '' as $$
@@ -402,6 +417,8 @@ declare
   matches int := 0;
   i int;
 begin
+  insert into public.daily_progress (room_id, day, kind, user_id) values (new.room_id, new.day, new.kind, new.user_id)
+  on conflict do nothing;
   if new.kind = 'trivia' and new.score > 0 then
     perform private.add_points(new.room_id, new.user_id, least(new.score, 5), 'trivia');
   end if;
@@ -517,7 +534,7 @@ grant execute on all functions in schema public to service_role;
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table public.daily_answers, public.race_runs, public.hero_points;
+    alter publication supabase_realtime add table public.daily_answers, public.daily_progress, public.race_runs, public.hero_points;
   end if;
 end;
 $$;

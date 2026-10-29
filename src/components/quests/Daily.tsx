@@ -12,12 +12,15 @@ const LETTER = ["A", "B", "C", "D"];
 export function Trivia({
   day,
   daily,
+  partnerDone,
   me,
   partner,
   onSubmit,
 }: {
   day: string;
   daily: DailyAnswer[];
+  /** They've played today (their answers unlock once you have too). */
+  partnerDone: boolean;
   me: Profile;
   partner: Profile;
   onSubmit: (answers: number[], score: number) => Promise<void>;
@@ -37,7 +40,7 @@ export function Trivia({
           {theirs ? (
             <ScoreChip p={partner} label={partner.display_name} score={theirs.score} total={qs.length} />
           ) : (
-            <p className="lcd small">WAITING FOR {partner.display_name}…</p>
+            <p className="lcd small">{partnerDone ? "LOADING THEIR SCORE…" : `WAITING FOR ${partner.display_name}…`}</p>
           )}
         </div>
         {theirs && (
@@ -118,7 +121,7 @@ export function Trivia({
         })}
       </div>
       <p className="fine center">
-        {theirs ? `${partner.display_name} already played today — beat them!` : `Question ${i + 1} of ${TRIVIA_PER_DAY}`}
+        {partnerDone || theirs ? `${partner.display_name} already played today — beat them!` : `Question ${i + 1} of ${TRIVIA_PER_DAY}`}
       </p>
     </div>
   );
@@ -140,12 +143,14 @@ function ScoreChip({ p, label, score, total }: { p: Profile; label: string; scor
 export function ThisOrThat({
   day,
   daily,
+  partnerDone,
   me,
   partner,
   onSubmit,
 }: {
   day: string;
   daily: DailyAnswer[];
+  partnerDone: boolean;
   me: Profile;
   partner: Profile;
   onSubmit: (answers: number[]) => Promise<void>;
@@ -210,7 +215,7 @@ export function ThisOrThat({
   return (
     <div className="quest-game">
       <p className="lcd small center">
-        {i + 1} / {pairs.length} · WHICH ONE?
+        {i + 1} / {pairs.length} · WHICH ONE?{partnerDone ? ` · ${partner.display_name} HAS PICKED` : ""}
       </p>
       <div className="tot-choice">
         <button type="button" className="tot-card left" onClick={() => setPicks((p) => [...p, 0])}>

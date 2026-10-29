@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sparkDay } from "./spark";
 import { weekStart } from "./quests-data";
-import type { DailyAnswer, Game, GameKind, HeroScore, RaceRun } from "./types";
+import type { DailyAnswer, DailyProgress, Game, GameKind, HeroScore, RaceRun } from "./types";
 
 type QuestGameKind = Exclude<GameKind, "ttt">;
 const KINDS: QuestGameKind[] = ["web4", "memory", "hotcold", "word"];
@@ -12,7 +12,7 @@ const KINDS: QuestGameKind[] = ["web4", "memory", "hotcold", "word"];
 export interface QuestEvents {
   /** A game changed because of the other person. */
   onGame?: (g: Game) => void;
-  onDaily?: (a: DailyAnswer) => void;
+  onDaily?: (a: DailyProgress) => void;
   onRace?: (r: RaceRun) => void;
 }
 
@@ -23,6 +23,7 @@ export interface QuestEvents {
 export function useQuests(supabase: SupabaseClient, roomId: string, meId: string, enabled: boolean, events: QuestEvents) {
   const [games, setGames] = useState<Partial<Record<QuestGameKind, Game>>>({});
   const [daily, setDaily] = useState<DailyAnswer[]>([]);
+  const [progress, setProgress] = useState<DailyProgress[]>([]);
   const [races, setRaces] = useState<RaceRun[]>([]);
   const [scores, setScores] = useState<HeroScore[]>([]);
   const [today, setToday] = useState(() => sparkDay());
@@ -47,11 +48,13 @@ export function useQuests(supabase: SupabaseClient, roomId: string, meId: string
 
   const loadAll = useCallback(async () => {
     if (!enabled) return;
-    const [gm, da, rr] = await Promise.all([
+    const [gm, da, rr, pr] = await Promise.all([
       supabase.from("games").select("*").eq("room_id", roomId).in("kind", KINDS).order("created_at", { ascending: false }).limit(40),
       supabase.from("daily_answers").select("*").eq("room_id", roomId).eq("day", today),
       supabase.from("race_runs").select("*").eq("room_id", roomId).eq("day", today).order("ms", { ascending: true }).limit(50),
+      supabase.from("daily_progress").select("room_id,day,kind,user_id").eq("room_id", roomId).eq("day", today),
     ]);
+    if (pr.data) setProgress(pr.data as DailyProgress[]);
     if (gm.data) {
       const latest: Partial<Record<QuestGameKind, Game>> = {};
       for (const g of gm.data as Game[]) {
@@ -88,8 +91,9 @@ export function useQuests(supabase: SupabaseClient, roomId: string, meId: string
           if (!echo && (row.turn === meId || (row.winner && row.winner !== "void"))) queueMicrotask(() => eventsRef.current.onGame?.(row));
         }
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_answers", filter }, (payload) => {
-        const row = payload.new as DailyAnswer;
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_progress", filter }, (payload) => {
+        const row = payload.new as DailyProgress;
+        setProgress((list) => (list.some((p) => p.kind === row.kind && p.user_id === row.user_id && p.day === row.day) ? list : [...list, row]));
         if (row.user_id !== meId) eventsRef.current.onDaily?.(row);
         // Their answers only become readable once you've answered: re-read.
         void supabase
@@ -151,6 +155,7 @@ export function useQuests(supabase: SupabaseClient, roomId: string, meId: string
         if (error) throw error;
         const { data } = await supabase.from("daily_answers").select("*").eq("room_id", roomId).eq("day", today);
         if (data) setDaily(data as DailyAnswer[]);
+        setProgress((list) => [...list, { room_id: roomId, day: today, kind, user_id: meId }]);
         void loadScores();
       },
       raceSubmit: async (ms: number) => {
@@ -163,10 +168,10 @@ export function useQuests(supabase: SupabaseClient, roomId: string, meId: string
       },
       reload: loadAll,
     }),
-    [call, roomId, supabase, today, loadAll, loadScores],
+    [call, roomId, supabase, today, loadAll, loadScores, meId],
   );
 
-  return { games, daily, races, scores, today, actions };
+  return { games, daily, progress, races, scores, today, actions };
 }
 
 export type Quests = ReturnType<typeof useQuests>;

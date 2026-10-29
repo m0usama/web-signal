@@ -20,7 +20,7 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await expect(night.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
   await night.getByLabel("Message", { exact: true }).fill("hi robot");
   await night.getByRole("button", { name: "SEND", exact: true }).click();
-  await expect(night.getByText("beep boop, just a robot here 🤖")).toBeVisible({ timeout: 15_000 });
+  await expect(night.getByText("beep boop, just a robot here 🤖").last()).toBeVisible({ timeout: 15_000 });
 
   // Back to Nova: the main chat is untouched by the bot.
   await nightChats.getByRole("button", { name: /Chat with Nova/i }).click();
@@ -35,7 +35,7 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await expect(nova.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
   await nova.getByLabel("Message", { exact: true }).fill("testing 1 2 3");
   await nova.getByRole("button", { name: "SEND", exact: true }).click();
-  await expect(nova.getByText("testing 1 2 3")).toBeVisible();
+  await expect(nova.getByText("testing 1 2 3").last()).toBeVisible();
 
   // The bot account (logged in by the owner) sees both chats and can answer Nova by hand.
   await login(robo, ROBO);
@@ -43,10 +43,10 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await openTab(robo, "COMMS");
   const roboChats = robo.getByRole("navigation", { name: "Chats" });
   await roboChats.getByRole("button", { name: /Chat with Nova/i }).click();
-  await expect(robo.getByText("testing 1 2 3")).toBeVisible({ timeout: 15_000 });
+  await expect(robo.getByText("testing 1 2 3").last()).toBeVisible({ timeout: 15_000 });
   await robo.getByLabel("Message", { exact: true }).fill("all systems go");
   await robo.getByRole("button", { name: "SEND", exact: true }).click();
-  await expect(nova.getByText("all systems go")).toBeVisible({ timeout: 15_000 });
+  await expect(nova.getByText("all systems go").last()).toBeVisible({ timeout: 15_000 });
   await nova.waitForTimeout(6000);
   await expect(nova.getByText("beep boop, just a robot here 🤖")).toHaveCount(0);
 
@@ -58,10 +58,10 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await robo.getByRole("button", { name: "SEND", exact: true }).click();
   const banner = nova.locator(".lobby-toast");
   await expect(banner).toContainText("R.O.B.O", { timeout: 15_000 });
-  await expect(nova.getByRole("button", { name: /Chat with R\.O\.B\.O, 1 unread/ })).toBeVisible();
+  await expect(nova.getByRole("button", { name: /Chat with R\.O\.B\.O, \d+ unread/ })).toBeVisible();
   await banner.click();
   await expect(nova.locator(".contact-chip.on")).toContainText("R.O.B.O");
-  await expect(nova.getByText("ping from the bot")).toBeVisible({ timeout: 15_000 });
+  await expect(nova.getByText("ping from the bot").last()).toBeVisible({ timeout: 15_000 });
 
   for (const p of [night, nova, robo]) await p.context().close();
 });

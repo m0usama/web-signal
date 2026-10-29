@@ -504,6 +504,7 @@ select t.ok((select (public.word_guess((select v::uuid from ctx where k = 'wd'),
 insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k = 'room'), 'trivia', '[1,2,0,3,1]', 4);
 reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
 select t.ok((select count(*) = 0 from public.daily_answers where kind = 'trivia'), 'partner trivia answers hidden until you answer');
+select t.ok((select count(*) = 1 from public.daily_progress where kind = 'trivia'), 'but you can see that they have played');
 insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k = 'room'), 'trivia', '[1,2,0,0,0]', 3);
 select t.ok((select count(*) = 2 from public.daily_answers where kind = 'trivia'), 'both trivia answers visible once both answered');
 select t.throws($$insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k='room'), 'trivia', '[1]', 1)$$, 'duplicate', 'one trivia round per day');
