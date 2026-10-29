@@ -117,6 +117,11 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await openTab(nova, "MAP");
   expect.soft(await nova.locator(".avatar-pin.them.online").count(), "Nova still sees Night online before the tune").toBe(1);
   await nova.getByRole("button", { name: /Play our tune/ }).click();
+  // Nova chats with more than one person, so she picks who hears it.
+  const picker = nova.getByRole("dialog", { name: "Play the tune for" });
+  if (await picker.waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+    await picker.getByRole("button", { name: /Play the tune for Night/i }).click();
+  }
   const outcome = await Promise.race([
     night.locator(".tune-banner").waitFor({ timeout: 20_000 }).then(() => "banner"),
     night.getByText(/PLAYED YOU A TUNE/).waitFor({ timeout: 20_000 }).then(() => "night: sound blocked"),
