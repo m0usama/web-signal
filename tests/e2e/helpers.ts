@@ -1,0 +1,36 @@
+import { expect, type Page } from "@playwright/test";
+
+export const PASSWORD = "test-password-123";
+export const NOVA = "nova@test.local";
+export const NIGHT = "night@test.local";
+export const STRANGER = "stranger@test.local";
+
+export async function login(page: Page, email: string) {
+  await page.goto("/login");
+  await page.getByLabel("EMAIL").fill(email);
+  await page.getByLabel("PASSWORD").fill(PASSWORD);
+  await page.getByRole("button", { name: /JACK IN/ }).click();
+  await page.waitForURL((u) => u.pathname === "/");
+}
+
+/** Gets past the intro and the sound prompt. */
+export async function enterApp(page: Page) {
+  const skip = page.getByRole("button", { name: /SKIP/ });
+  if (await skip.isVisible({ timeout: 4000 }).catch(() => false)) await skip.click();
+  const notNow = page.getByRole("button", { name: "NOT NOW" });
+  if (await notNow.isVisible({ timeout: 2000 }).catch(() => false)) await notNow.click();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  await expect(page.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
+}
+
+export async function openTab(page: Page, name: "MAP" | "COMMS" | "SIGNALS" | "PROFILE") {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: new RegExp(name) }).click();
+}
+
+/** A tiny valid PNG (4x4 magenta), generated in memory. */
+export function tinyPng(): Buffer {
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEklEQVR4nGP4z8DwHwyYGBgAABkHAgvTb3wAAAAASUVORK5CYII=",
+    "base64",
+  );
+}
