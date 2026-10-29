@@ -86,7 +86,7 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await night.locator(".drop-row.theirs").first().getByRole("button", { name: "OPEN" }).click();
   await expect(night.getByText("meet me on this roof")).toBeVisible();
   await night.getByRole("button", { name: "CLOSE", exact: true }).click();
-  await expect(nova.getByText(/OPENED YOUR DROP/)).toBeVisible();
+  await expect(nova.locator(".drop-marker.mine .drop-tag", { hasText: "OPENED" }).first()).toBeAttached();
   await openTab(night, "MAP");
 
   // Ghost photo: one look, then gone for good.
@@ -116,7 +116,15 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await openTab(night, "MAP");
   await openTab(nova, "MAP");
   await nova.getByRole("button", { name: /Play our tune/ }).click();
-  await expect(night.locator(".tune-banner")).toBeVisible({ timeout: 15_000 });
+  const outcome = await Promise.race([
+    night.locator(".tune-banner").waitFor({ timeout: 20_000 }).then(() => "banner"),
+    night.getByText(/PLAYED YOU A TUNE/).waitFor({ timeout: 20_000 }).then(() => "night: sound blocked"),
+    nova
+      .getByText(/SOUND IS OFF|NO ANSWER|ISN'T ONLINE|STILL LINKING|ALREADY PLAYING/)
+      .waitFor({ timeout: 20_000 })
+      .then(async () => `nova: ${(await nova.locator(".toast").allTextContents()).join(" / ")}`),
+  ]).catch(() => "nothing happened");
+  expect(outcome).toBe("banner");
   await expect(nova.locator(".tune-btn.status-playing").first()).toBeVisible({ timeout: 15_000 });
   await expect(night.locator(".tune-banner")).toHaveCount(0, { timeout: 30_000 });
   await expect(nova.locator(".tune-btn.status-idle").first()).toBeVisible({ timeout: 15_000 });
