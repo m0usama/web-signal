@@ -115,8 +115,10 @@ export function CityMap(props: Props) {
   const handleTap = (clientX: number, clientY: number, target: EventTarget | null) => {
     if (target instanceof Element && target.closest("[data-interactive]")) return;
     const { x, y } = toMap(clientX, clientY);
-    if (x < 0 || y < 0 || x > CITY_W || y > CITY_H) return;
-    const b = buildingAt(city, x, y);
+    const outside = x < 0 || y < 0 || x > CITY_W || y > CITY_H;
+    // Hot & Cold taps just off the island still count (snapped to the edge).
+    if (outside && props.mode !== "hide" && props.mode !== "seek") return;
+    const b = outside ? undefined : buildingAt(city, x, y);
     if (props.mode !== "browse") {
       props.onPick(Math.min(1, Math.max(0, x / CITY_W)), Math.min(1, Math.max(0, y / CITY_H)), b);
       return;

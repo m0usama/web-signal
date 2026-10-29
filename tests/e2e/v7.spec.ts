@@ -90,7 +90,7 @@ test("v7: City Quests — landmarks, Web Four, trivia, This or That, secret word
   b = await openLandmark(night, "SPIDER-SENSE ANTENNA");
   await b.getByRole("button", { name: /SENSE ON THE MAP/ }).click({ timeout: 15_000 });
   const nbox = (await night.locator(".map-viewport").boundingBox())!;
-  await night.mouse.click(nbox.x + 20, nbox.y + 20);
+  await night.mouse.click(nbox.x + nbox.width * 0.3, nbox.y + nbox.height * 0.35);
   await expect(night.locator(".hunt-label")).toBeVisible({ timeout: 15_000 });
   await expect(night.getByText(/9 TRIES LEFT/)).toBeVisible();
   await expect(nova.locator(".hunt-dot")).toHaveCount(1, { timeout: 15_000 });
