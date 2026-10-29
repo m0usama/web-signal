@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { notifyPartner } from "@/lib/push-server";
+import { getAdminSupabase } from "@/lib/supabase/admin";
 import type { PushEvent } from "@/lib/push-text";
 
 export const dynamic = "force-dynamic";
@@ -9,10 +10,18 @@ const UUID = /^[0-9a-f-]{36}$/i;
 
 /** Called by the database (pg_net) after inserts. Authenticated by a shared secret. */
 export async function POST(request: Request) {
-  const secret = process.env.PUSH_WEBHOOK_SECRET;
-  if (!secret || request.headers.get("x-push-secret") !== secret) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const given = request.headers.get("x-push-secret") ?? "";
+  const envSecret = process.env.PUSH_WEBHOOK_SECRET;
+  let ok = false;
+  if (given.length >= 32) {
+    if (envSecret) ok = given === envSecret;
+    else {
+      // The secret is generated and kept in the database (private schema).
+      const { data } = await getAdminSupabase().rpc("push_check_secret", { p_secret: given });
+      ok = data === true;
+    }
   }
+  if (!ok) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   let body: Record<string, unknown>;
   try {
     body = await request.json();

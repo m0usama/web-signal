@@ -7,7 +7,7 @@ begin;
 
 -- ------------------------------------------------------------------ helpers
 create schema if not exists t;
-grant usage on schema t to authenticated, anon;
+grant usage on schema t to authenticated, anon, service_role;
 
 create or replace function t.ok(cond boolean, msg text) returns void language plpgsql as $$
 begin
@@ -35,7 +35,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', uid, 'role', 'authenticated')::text, true);
 end $$;
-grant execute on all functions in schema t to authenticated, anon;
+grant execute on all functions in schema t to authenticated, anon, service_role;
 
 -- ------------------------------------------------------------------ fixtures
 insert into auth.users (id, email) values
@@ -44,7 +44,7 @@ insert into auth.users (id, email) values
   ('cccccccc-0000-0000-0000-000000000003', 'stranger@example.com');
 
 create temp table ctx (k text primary key, v text);
-grant all on ctx to authenticated;
+grant all on ctx to authenticated, service_role;
 insert into ctx values ('room', public.setup_pair('nova@example.com', 'Nova', 'NIGHT@example.com', 'Night')::text);
 
 select t.ok((select count(*) = 2 from public.room_members), 'setup_pair creates a room with two members');
@@ -414,6 +414,24 @@ insert into public.messages (room_id, client_id, kind, body, mode)
 values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'only for nova', 'normal');
 reset role;
 select t.ok((select count(*) = 2 from public.messages where sender_id = 'cccccccc-0000-0000-0000-000000000003'), 'bot only answers the chosen person');
+
+-- ================================================================== push keys stay server-side
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+select t.throws($$select public.push_check_secret('x')$$, 'permission denied', 'people cannot test the push secret');
+select t.throws($$select * from public.push_vapid_keys()$$, 'permission denied', 'people cannot read the private push key');
+select t.throws($$select public.push_save_vapid_keys('a','b')$$, 'permission denied', 'people cannot replace the push keys');
+select t.ok((select public.push_public_key() is null), 'people can read the public push key');
+reset role;
+select t.ok((select length(value) = 64 from private.config where key = 'push_secret'), 'webhook secret is generated in the database');
+insert into ctx select 'push_secret', value from private.config where key = 'push_secret';
+set local role service_role;
+select public.push_save_vapid_keys('pub1', 'priv1');
+select public.push_save_vapid_keys('pub2', 'priv2');
+select t.ok((select public_key = 'pub1' and private_key = 'priv1' from public.push_vapid_keys()), 'first saved key pair wins');
+select t.ok((select public.push_check_secret((select v from ctx where k = 'push_secret'))), 'server can check the webhook secret');
+select t.ok((select not public.push_check_secret('wrong')), 'a wrong webhook secret is rejected');
+reset role;
 
 rollback;
 \echo 'ALL DATABASE SECURITY TESTS PASSED'

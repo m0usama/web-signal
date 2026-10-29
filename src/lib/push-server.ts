@@ -4,14 +4,44 @@ import { getAdminSupabase } from "./supabase/admin";
 import { pushText, type PushEvent } from "./push-text";
 
 let configured = false;
-function configure(): boolean {
+
+/**
+ * VAPID keys: from env vars if set, otherwise from the database (private
+ * schema). If neither exists yet, a pair is generated once and stored, so
+ * the keys never have to be copied around by hand.
+ */
+async function configure(): Promise<boolean> {
   if (configured) return true;
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  if (!pub || !priv) return false;
+  let pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  let priv = process.env.VAPID_PRIVATE_KEY;
+  if (!pub || !priv) {
+    const admin = getAdminSupabase();
+    const read = async () => {
+      const { data } = await admin.rpc("push_vapid_keys");
+      const row = (Array.isArray(data) ? data[0] : data) as { public_key?: string; private_key?: string } | null;
+      return row?.public_key && row.private_key ? row : null;
+    };
+    let keys = await read();
+    if (!keys) {
+      const fresh = webpush.generateVAPIDKeys();
+      await admin.rpc("push_save_vapid_keys", { p_public: fresh.publicKey, p_private: fresh.privateKey });
+      keys = await read();
+    }
+    if (!keys) return false;
+    pub = keys.public_key!;
+    priv = keys.private_key!;
+  }
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://web-signal-dun.vercel.app", pub, priv);
   configured = true;
   return true;
+}
+
+/** Public key browsers subscribe with (creates the key pair on first use). */
+export async function vapidPublicKey(): Promise<string | null> {
+  if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!(await configure())) return null;
+  const { data } = await getAdminSupabase().rpc("push_public_key");
+  return (data as string | null) ?? null;
 }
 
 /**
@@ -19,7 +49,7 @@ function configure(): boolean {
  * person in the room. Skipped while they have the app open on screen.
  */
 export async function notifyPartner(event: PushEvent & { room_id: string; from: string }): Promise<{ sent: number; skipped?: string }> {
-  if (!configure()) return { sent: 0, skipped: "not configured" };
+  if (!(await configure())) return { sent: 0, skipped: "not configured" };
   const admin = getAdminSupabase();
 
   const { data: members } = await admin.from("room_members").select("user_id").eq("room_id", event.room_id);

@@ -49,7 +49,11 @@ function keyToBytes(base64url: string): Uint8Array<ArrayBuffer> {
 
 /** Must be called from a tap (browsers require it for the permission prompt). */
 export async function enablePush(supabase: SupabaseClient): Promise<PushState> {
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  let key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!key) {
+    const res = await fetch("/api/push/key", { cache: "no-store" }).catch(() => null);
+    key = res?.ok ? (((await res.json()) as { key?: string | null }).key ?? undefined) : undefined;
+  }
   if (!key) throw new Error("NOTIFICATIONS AREN'T SET UP ON THE SERVER YET");
   const state = await pushState();
   if (state === "needs-install" || state === "unsupported") return state;

@@ -78,23 +78,20 @@ Each person logs in with just `spiderziya` or `spidey` and can change their pass
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon / publishable key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key (**server only, never public**) |
    | `CRON_SECRET` | any long random string |
-   | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | push keys (`npx web-push generate-vapid-keys`) |
-   | `VAPID_SUBJECT` | your site URL |
-   | `PUSH_WEBHOOK_SECRET` | long random string, also saved in the database (below) |
 
 3. **Deploy.** Every push to `main` redeploys automatically.
 4. Back in Supabase: **Authentication → URL Configuration** → set **Site URL** to your Vercel URL (needed for invitation and password-reset links).
 
 ### Push notifications (database side)
 
-Run once in the SQL editor so the database can ask the app to send notifications:
+No keys to copy: the database generates the webhook secret, and the app generates its push key pair the first time someone turns notifications on. Both stay in the database's private schema. Run once in the SQL editor so the database knows where to send notification requests:
 
 ```sql
-insert into private.config (key, value) values
-  ('push_url', 'https://YOUR-SITE.vercel.app/api/push'),
-  ('push_secret', 'THE SAME PUSH_WEBHOOK_SECRET AS IN VERCEL')
+insert into private.config (key, value) values ('push_url', 'https://YOUR-SITE.vercel.app/api/push')
 on conflict (key) do update set value = excluded.value;
 ```
+
+(Optional: env vars `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and `PUSH_WEBHOOK_SECRET` override the stored ones.)
 
 ### Extra people (e.g. a test account)
 
