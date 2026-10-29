@@ -70,10 +70,11 @@ test("v7: City Quests — landmarks, Web Four, trivia, This or That, secret word
   await a.getByLabel("Secret word").fill("web");
   await a.getByRole("button", { name: /HIDE IT IN THE CRATER/ }).click();
   await expect(b.getByText("GUESS A LETTER", { exact: false })).toBeVisible({ timeout: 15_000 });
-  for (const l of ["W", "Z", "E", "B"]) {
+  for (const l of ["W", "Z", "E"]) {
     await b.getByRole("button", { name: `Letter ${l}` }).click();
     await expect(b.getByRole("button", { name: `Letter ${l}` })).toBeDisabled();
   }
+  await b.getByRole("button", { name: "Letter B" }).click(); // last letter: the keyboard goes away
   await expect(b.getByText(/YOU CRACKED IT/)).toBeVisible();
   await expect(a.getByText(/CRACKED IT!/)).toBeVisible({ timeout: 15_000 });
   await a.getByRole("button", { name: "Close" }).click();
