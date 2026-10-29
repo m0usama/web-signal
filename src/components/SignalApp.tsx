@@ -340,10 +340,8 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
 
   const sendTune = () => {
     if (tuneOut) return;
-    if (!room.presence.online) {
-      toast({ text: `${room.partner.display_name} ISN'T ONLINE — THE TUNE ONLY PLAYS LIVE`, tone: "warn" });
-      return;
-    }
+    // Always try: presence can lag a few seconds, and the reply (or the
+    // timeout below) tells us whether it actually reached the other phone.
     const id = crypto.randomUUID();
     if (!room.actions.broadcast("tune", { id })) {
       toast({ text: "STILL LINKING — TRY AGAIN IN A SECOND", tone: "warn" });
@@ -353,7 +351,10 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
     if (tuneTimer.current) clearTimeout(tuneTimer.current);
     tuneTimer.current = setTimeout(() => {
       setTuneOut(null);
-      toast({ text: "NO ANSWER — THE TUNE DIDN'T REACH THEM", tone: "warn" });
+      toast({
+        text: room.presence.online ? "NO ANSWER — THE TUNE DIDN'T REACH THEM" : `${room.partner.display_name} ISN'T ONLINE — THE TUNE ONLY PLAYS LIVE`,
+        tone: "warn",
+      });
     }, 10_000);
   };
 
