@@ -8,8 +8,10 @@ import type { Profile, SignalDrop } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { CitySvg } from "./CitySvg";
 import { Icon } from "./Icon";
+import type { Landmark, QuestKey, QuestStatus } from "@/lib/landmarks";
+import { HINT_STYLE, type HuntGuess } from "./quests/HotCold";
 
-export type MapMode = "browse" | "drop" | "move";
+export type MapMode = "browse" | "drop" | "move" | "hide" | "seek";
 
 export interface Bubble {
   key: number;
@@ -26,6 +28,11 @@ export interface Flight {
 interface Props {
   me: Profile;
   partner: Profile;
+  /** City Quests landmarks (games and daily activities). */
+  landmarks?: { lm: Landmark; status: QuestStatus }[];
+  onOpenLandmark?: (key: QuestKey) => void;
+  /** Hot & Cold: guesses so far, the revealed spot, and (for the hider) their own spot. */
+  hunt?: { guesses: HuntGuess[]; spot: { x: number; y: number } | null; mine: { x: number; y: number } | null } | null;
   /** Other people you chat with (shown on the map too, a little dimmer). */
   others?: { profile: Profile; online: boolean }[];
   partnerOnline: boolean;
@@ -303,6 +310,48 @@ export function CityMap(props: Props) {
             );
           })}
 
+          {/* City Quests landmarks */}
+          {props.landmarks?.map(({ lm, status }) => (
+            <button
+              key={lm.key}
+              type="button"
+              data-interactive
+              className={`landmark tone-${status.tone}`}
+              style={{ left: lm.x * CITY_W, top: lm.y * CITY_H, "--lm": lm.color } as React.CSSProperties}
+              onClick={() => props.onOpenLandmark?.(lm.key)}
+              aria-label={`${lm.name}: ${lm.activity}. ${status.text}`}
+            >
+              {status.tone !== "idle" && <span className="landmark-status">{status.text}</span>}
+              <span className="landmark-sign">
+                <span className="landmark-emoji">{lm.emoji}</span>
+              </span>
+              <span className="landmark-legs" aria-hidden />
+              <span className="landmark-name">{lm.name}</span>
+            </button>
+          ))}
+
+          {/* Hot & Cold */}
+          {props.hunt?.guesses.map((g, i) => (
+            <span
+              key={`hunt-${i}`}
+              className={`hunt-dot ${i === props.hunt!.guesses.length - 1 ? "latest" : ""}`}
+              style={{ left: g.x * CITY_W, top: g.y * CITY_H, "--hint": HINT_STYLE[g.hint].color } as React.CSSProperties}
+              aria-label={`Guess ${i + 1}: ${g.hint}`}
+            >
+              {i === props.hunt!.guesses.length - 1 && <span className="hunt-label">{HINT_STYLE[g.hint].label}</span>}
+            </span>
+          ))}
+          {props.hunt?.spot && (
+            <span className="hunt-spot" style={{ left: props.hunt.spot.x * CITY_W, top: props.hunt.spot.y * CITY_H }} aria-label="The secret spot">
+              🎯
+            </span>
+          )}
+          {!props.hunt?.spot && props.hunt?.mine && (
+            <span className="hunt-spot mine" style={{ left: props.hunt.mine.x * CITY_W, top: props.hunt.mine.y * CITY_H }} aria-label="Where you hid it">
+              📡
+            </span>
+          )}
+
           {/* poke flights */}
           {props.flights.map((f) => {
             const from = posOf(f.fromId);
@@ -357,7 +406,13 @@ export function CityMap(props: Props) {
 
       {props.mode !== "browse" && (
         <div className="map-hint" role="status">
-          {props.mode === "drop" ? "TAP A ROOFTOP TO DROP A SIGNAL" : "TAP WHERE YOU WANT TO STAND"}
+          {props.mode === "drop"
+            ? "TAP A ROOFTOP TO DROP A SIGNAL"
+            : props.mode === "hide"
+              ? "📡 TAP ANYWHERE TO HIDE YOUR SECRET SPOT"
+              : props.mode === "seek"
+                ? `📡 TAP TO SENSE IT · ${props.hunt ? Math.max(0, 10 - props.hunt.guesses.length) : 10} TRIES LEFT`
+                : "TAP WHERE YOU WANT TO STAND"}
         </div>
       )}
 

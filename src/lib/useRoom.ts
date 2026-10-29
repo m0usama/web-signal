@@ -116,7 +116,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       supabase.from("badges").select("*"),
       supabase.from("spark_answers").select("*").eq("room_id", roomId).gte("day", sixtyDaysAgo).order("day", { ascending: false }),
       supabase.rpc("spark_streak", { p_room: roomId }),
-      supabase.from("games").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1),
+      supabase.from("games").select("*").eq("room_id", roomId).eq("kind", "ttt").order("created_at", { ascending: false }).limit(1),
       supabase.from("private_rooms").select("next_meet_at,next_meet_label").eq("id", roomId).maybeSingle(),
     ]);
     if (msgs.data) {
@@ -216,6 +216,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       .on("postgres_changes", { event: "*", schema: "public", table: "games", filter }, (payload) => {
         if (payload.eventType === "DELETE") return;
         const row = payload.new as Game;
+        if (row.kind && row.kind !== "ttt") return; // other games: see useQuests
         setGame((g) => {
           if (g && g.id !== row.id && Date.parse(g.created_at) > Date.parse(row.created_at)) return g;
           if (g?.id === row.id && Date.parse(g.updated_at) > Date.parse(row.updated_at)) return g;

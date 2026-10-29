@@ -28,6 +28,15 @@ import { registerServiceWorker } from "@/lib/push-client";
 import { ContactBar } from "./ContactBar";
 import { Avatar } from "./Avatar";
 import { playTuneInOtherRoom } from "@/lib/tune-remote";
+import { useQuests } from "@/lib/useQuests";
+import { LANDMARKS, landmark, type QuestKey, type QuestStatus } from "@/lib/landmarks";
+import { QuestSheet } from "./quests/Common";
+import { Web4 } from "./quests/Web4";
+import { Memory } from "./quests/Memory";
+import { WordGuess } from "./quests/WordGuess";
+import { Trivia, ThisOrThat } from "./quests/Daily";
+import { Race, formatMs } from "./quests/Race";
+import { HotCold, huntState, recallHide, rememberHide, HINT_STYLE } from "./quests/HotCold";
 
 const INTRO_KEY = "ws-intro-seen";
 const SOUND_PROMPT_KEY = "ws-sound-prompt";
@@ -105,8 +114,10 @@ export function SignalApp({
   onSwitch?: (roomId: string, tab: Tab) => void;
 }) {
   const [tab, setTab] = useState<Tab>(() =>
-    boot.chatOnly && (boot.initialTab === "signals" || boot.initialTab === "play") ? "comms" : (boot.initialTab ?? "map"),
+    boot.initialTab === "play" ? "map" : boot.chatOnly && boot.initialTab === "signals" ? "comms" : (boot.initialTab ?? "map"),
   );
+  const [quest, setQuest] = useState<QuestKey | null>(null);
+  const openQuestRef = useRef<(k: QuestKey) => void>(() => {});
   const now = useNow(20_000);
   // This component only renders in the browser (see ClientApp), so storage is safe to read here.
   const [introDone, setIntroDone] = useState(() => readSession(INTRO_KEY));
@@ -253,11 +264,11 @@ export function SignalApp({
       },
       onGame: (g) => {
         if (g.winner === "void") return;
-        if (g.turn === boot.me.id && tabRef.current !== "play") {
+        if (g.turn === boot.me.id && quest !== "ttt") {
           alert("poke");
-          toast({ text: "YOUR MOVE ON THE ROOFTOP 🎮", icon: "star", action: { label: "PLAY", run: () => setTab("play") } });
-        } else if (g.winner && g.winner !== "draw" && tabRef.current !== "play") {
-          toast({ text: "ROOFTOP GAME OVER — SEE WHO WON", icon: "star", action: { label: "SEE", run: () => setTab("play") } });
+          toast({ text: "YOUR MOVE ON THE ROOFTOP 🎮", icon: "star", action: { label: "PLAY", run: () => openQuestRef.current("ttt") } });
+        } else if (g.winner && g.winner !== "draw" && quest !== "ttt") {
+          toast({ text: "ROOFTOP GAME OVER — SEE WHO WON", icon: "star", action: { label: "SEE", run: () => openQuestRef.current("ttt") } });
         }
       },
       onBadge: (b) => {
@@ -313,6 +324,98 @@ export function SignalApp({
     },
     tab,
   );
+
+  // ------------------------------------------------------------------ City Quests
+  const quests = useQuests(room.supabase, boot.roomId, boot.me.id, !boot.chatOnly, {
+    onGame: (g) => {
+      const key = g.kind as QuestKey;
+      const lm = landmark(key);
+      if (quest === key) return;
+      const over = g.winner && g.winner !== "void";
+      toast({
+        text: over ? `GAME OVER AT ${lm.name} — SEE WHO WON` : `YOUR MOVE AT ${lm.name} ${lm.emoji}`,
+        icon: "star",
+        action: { label: over ? "SEE" : "PLAY", run: () => openQuestRef.current(key) },
+      });
+    },
+    onDaily: (a) => {
+      const key: QuestKey = a.kind === "trivia" ? "trivia" : "tot";
+      toast({
+        text: `${boot.partner.display_name} ${a.kind === "trivia" ? "PLAYED TODAY'S TRIVIA 📰" : "DID TODAY'S THIS OR THAT 🦉"}`,
+        icon: "sparkle",
+        action: { label: "OPEN", run: () => openQuestRef.current(key) },
+      });
+    },
+    onRace: (r) => {
+      toast({
+        text: `${boot.partner.display_name} SWUNG THE BRIDGE IN ${formatMs(r.ms)} 🕸`,
+        icon: "zap",
+        action: { label: "RACE", run: () => openQuestRef.current("race") },
+      });
+    },
+  });
+
+  const openQuest = useCallback((k: QuestKey) => {
+    setTab("map");
+    setMapMode("browse");
+    setQuest(k);
+    synth.play("send");
+  }, []);
+  useEffect(() => {
+    openQuestRef.current = openQuest;
+  }, [openQuest]);
+
+  const hotcold = quests.games.hotcold && quests.games.hotcold.winner !== "void" ? quests.games.hotcold : undefined;
+  const hunt = hotcold
+    ? {
+        ...huntState(hotcold),
+        mine: hotcold.x_player === boot.me.id ? recallHide(hotcold.id) : null,
+      }
+    : null;
+
+  const status = (k: QuestKey): QuestStatus => {
+    const me = boot.me.id;
+    const turnGame = (g: typeof room.game | undefined, idle: string): QuestStatus => {
+      if (!g || g.winner === "void") return { tone: "idle", text: idle };
+      if (g.winner) return { tone: "done", text: "GAME OVER" };
+      return g.turn === me ? { tone: "turn", text: "YOUR MOVE" } : { tone: "wait", text: "THEIR MOVE" };
+    };
+    const dailyStatus = (kind: "trivia" | "tot"): QuestStatus => {
+      const mine = quests.daily.some((d) => d.kind === kind && d.user_id === me && d.day === quests.today);
+      const theirs = quests.daily.some((d) => d.kind === kind && d.user_id !== me && d.day === quests.today);
+      if (!mine) return theirs ? { tone: "turn", text: "YOUR TURN" } : { tone: "new", text: "NEW TODAY" };
+      return theirs ? { tone: "done", text: "SEE RESULTS" } : { tone: "wait", text: "WAITING" };
+    };
+    switch (k) {
+      case "ttt":
+        return turnGame(room.game ?? undefined, "PLAY");
+      case "web4":
+        return turnGame(quests.games.web4, "PLAY");
+      case "memory":
+        return turnGame(quests.games.memory, "PLAY");
+      case "word":
+        return turnGame(quests.games.word, "PLAY");
+      case "hotcold": {
+        if (!hotcold || hotcold.winner) return { tone: "idle", text: "HIDE ONE" };
+        return hotcold.turn === me ? { tone: "turn", text: "FIND IT!" } : { tone: "wait", text: "HIDDEN" };
+      }
+      case "trivia":
+        return dailyStatus("trivia");
+      case "tot":
+        return dailyStatus("tot");
+      case "race": {
+        const mine = quests.races.filter((r) => r.user_id === me).reduce((m, r) => Math.min(m, r.ms), Infinity);
+        const theirs = quests.races.filter((r) => r.user_id !== me).reduce((m, r) => Math.min(m, r.ms), Infinity);
+        if (!Number.isFinite(mine)) return Number.isFinite(theirs) ? { tone: "turn", text: "BEAT IT" } : { tone: "new", text: "RACE TODAY" };
+        if (Number.isFinite(theirs) && theirs < mine) return { tone: "turn", text: "BEAT IT" };
+        return { tone: "done", text: formatMs(mine) };
+      }
+      default:
+        return { tone: "idle", text: "" };
+    }
+  };
+  const landmarks = boot.chatOnly ? [] : LANDMARKS.map((lm) => ({ lm, status: status(lm.key) }));
+  const questTurns = landmarks.filter((l) => l.status.tone === "turn" || l.status.tone === "new").length;
 
   // ------------------------------------------------------------------ intro + sound prompt
   const finishIntro = useCallback(() => {
@@ -410,6 +513,39 @@ export function SignalApp({
   };
 
   const onPick = async (x: number, y: number, building?: Building) => {
+    if (mapMode === "hide") {
+      setMapMode("browse");
+      try {
+        const g = await quests.actions.hotcoldNew(x, y);
+        rememberHide(g.id, x, y);
+        toast({ text: `SPOT HIDDEN 📡 — ${room.partner.display_name} HAS 10 TRIES`, icon: "spider" });
+      } catch (e) {
+        toast({ text: friendlyError(e), tone: "warn" });
+      }
+      return;
+    }
+    if (mapMode === "seek") {
+      if (!hotcold || hotcold.winner) {
+        setMapMode("browse");
+        return;
+      }
+      try {
+        const g = await quests.actions.hotcoldGuess(hotcold.id, x, y);
+        const { guesses } = huntState(g);
+        const last = guesses[guesses.length - 1];
+        if (navigator.vibrate) navigator.vibrate(last?.hint === "FOUND" ? [40, 40, 120] : 25);
+        if (g.winner) {
+          setMapMode("browse");
+          toast({ text: g.winner === "O" ? `FOUND IT IN ${guesses.length}! 🎯 +3` : "OUT OF TRIES — THE SPOT IS ON THE MAP", tone: g.winner === "O" ? "love" : "warn" }, 5000);
+          synth.play(g.winner === "O" ? "badge" : "ghost");
+        } else if (last) {
+          toast({ text: HINT_STYLE[last.hint].label, tone: "info" }, 1600);
+        }
+      } catch (e) {
+        toast({ text: friendlyError(e), tone: "warn" });
+      }
+      return;
+    }
     if (mapMode === "drop") {
       setPendingDrop({ x, y, building });
     } else if (mapMode === "move") {
@@ -586,6 +722,9 @@ export function SignalApp({
             me={room.me}
             partner={room.partner}
             others={others}
+            landmarks={mapMode === "browse" || mapMode === "seek" || mapMode === "hide" ? landmarks : []}
+            onOpenLandmark={openQuest}
+            hunt={hunt}
             partnerOnline={room.partnerInApp}
             partnerTyping={room.presence.typing}
             partnerView={room.presence.view}
@@ -712,29 +851,6 @@ export function SignalApp({
                 }}
               />
             )}
-            {tab === "play" && (
-              <section className="panel-scroll play" aria-label="Play">
-                <TicTacToe
-                  game={room.game}
-                  me={room.me}
-                  partner={room.partner}
-                  onNew={() => room.actions.newGame()}
-                  onMove={(c) => room.actions.gameMove(c)}
-                />
-                <Doodle
-                  bus={doodleBus}
-                  partnerName={room.partner.display_name}
-                  onSendImage={async (file) => {
-                    try {
-                      await room.actions.sendMedia(file, "normal", 10);
-                      toast({ text: "DOODLE SENT TO THE CHAT", icon: "sparkle" });
-                    } catch (e) {
-                      toast({ text: friendlyError(e), tone: "warn" });
-                    }
-                  }}
-                />
-              </section>
-            )}
             {tab === "profile" && (
               <ProfilePanel
                 me={room.me}
@@ -765,11 +881,10 @@ export function SignalApp({
             ["map", "MAP", "◉"],
             ["comms", "COMMS", "✉"],
             ["signals", "SIGNALS", "⚡"],
-            ["play", "PLAY", "✦"],
             ["profile", "ME", "☺"],
           ] as const
         )
-          .filter(([key]) => !chatOnly || (key !== "signals" && key !== "play"))
+          .filter(([key]) => !chatOnly || key !== "signals")
           .map(([key, label, glyph]) => (
           <button
             key={key}
@@ -790,9 +905,7 @@ export function SignalApp({
             <span>{label}</span>
             {key === "comms" && room.unread > 0 && tab !== "comms" && <span className="nav-badge">{room.unread > 9 ? "9+" : room.unread}</span>}
             {key === "signals" && newDrops > 0 && tab !== "signals" && <span className="nav-badge">{newDrops}</span>}
-            {key === "play" && room.game && !room.game.winner && room.game.turn === boot.me.id && tab !== "play" && (
-              <span className="nav-badge">!</span>
-            )}
+            {key === "map" && questTurns > 0 && tab !== "map" && <span className="nav-badge">{questTurns}</span>}
           </button>
         ))}
       </nav>
@@ -838,6 +951,73 @@ export function SignalApp({
             </button>
           </div>
         </div>
+      )}
+
+      {quest && !boot.chatOnly && (
+        <QuestSheet lm={landmark(quest)} onClose={() => setQuest(null)} scores={quests.scores} me={room.me} partner={room.partner}>
+          {quest === "ttt" && (
+            <TicTacToe game={room.game} me={room.me} partner={room.partner} onNew={() => room.actions.newGame()} onMove={(c) => room.actions.gameMove(c)} />
+          )}
+          {quest === "doodle" && (
+            <Doodle
+              bus={doodleBus}
+              partnerName={room.partner.display_name}
+              onSendImage={async (file) => {
+                try {
+                  await room.actions.sendMedia(file, "normal", 10);
+                  toast({ text: "DOODLE SENT TO THE CHAT", icon: "sparkle" });
+                } catch (e) {
+                  toast({ text: friendlyError(e), tone: "warn" });
+                }
+              }}
+            />
+          )}
+          {quest === "web4" && (
+            <Web4 game={quests.games.web4} me={room.me} partner={room.partner} onNew={quests.actions.web4New} onMove={quests.actions.web4Move} />
+          )}
+          {quest === "memory" && (
+            <Memory game={quests.games.memory} me={room.me} partner={room.partner} onNew={quests.actions.memoryNew} onFlip={quests.actions.memoryFlip} />
+          )}
+          {quest === "word" && (
+            <WordGuess game={quests.games.word} me={room.me} partner={room.partner} onNew={quests.actions.wordNew} onGuess={quests.actions.wordGuess} />
+          )}
+          {quest === "hotcold" && (
+            <HotCold
+              game={quests.games.hotcold}
+              me={room.me}
+              partner={room.partner}
+              onHide={() => {
+                setQuest(null);
+                setMapMode("hide");
+              }}
+              onSeek={() => {
+                setQuest(null);
+                setMapMode("seek");
+              }}
+            />
+          )}
+          {quest === "trivia" && (
+            <Trivia
+              day={quests.today}
+              daily={quests.daily}
+              me={room.me}
+              partner={room.partner}
+              onSubmit={(answers, score) => quests.actions.answerDaily("trivia", answers, score)}
+            />
+          )}
+          {quest === "tot" && (
+            <ThisOrThat
+              day={quests.today}
+              daily={quests.daily}
+              me={room.me}
+              partner={room.partner}
+              onSubmit={(answers) => quests.actions.answerDaily("tot", answers, 0)}
+            />
+          )}
+          {quest === "race" && (
+            <Race day={quests.today} runs={quests.races} me={room.me} partner={room.partner} onSubmit={quests.actions.raceSubmit} />
+          )}
+        </QuestSheet>
       )}
 
       {tunePicker && (

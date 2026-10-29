@@ -11,7 +11,7 @@ test("v6: the bot chat is messages-only for Night, and the tune lets Nova pick w
   await enterApp(night);
   const nav = night.getByRole("navigation", { name: "Main" });
   // Main chat: everything is there, and Night's tune goes straight to Nova (the only choice).
-  await expect(nav.getByRole("button", { name: /PLAY/ })).toBeVisible();
+  await expect(night.getByRole("button", { name: /^THWIP TOWER:/ })).toBeAttached();
   await expect(night.getByRole("button", { name: /Play our tune on Nova's phone/i })).toBeVisible();
 
   // Bot chat: messages only.
@@ -19,7 +19,7 @@ test("v6: the bot chat is messages-only for Night, and the tune lets Nova pick w
   await night.getByRole("navigation", { name: "Chats" }).getByRole("button", { name: /Chat with R\.O\.B\.O/ }).click();
   await expect(night.locator(".contact-chip.on")).toContainText("R.O.B.O");
   await expect(nav.getByRole("button", { name: /SIGNALS/ })).toHaveCount(0);
-  await expect(nav.getByRole("button", { name: /PLAY/ })).toHaveCount(0);
+  await expect(night.locator(".landmark")).toHaveCount(0);
   await expect(night.getByLabel("Message", { exact: true })).toBeVisible();
   await openTab(night, "MAP");
   await expect(night.getByRole("button", { name: "▼ DROP", exact: true })).toHaveCount(0);

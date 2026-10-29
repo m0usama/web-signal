@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { enterApp, login, NIGHT, NOVA, openTab, tinyPng } from "./helpers";
+import { enterApp, login, NIGHT, NOVA, openLandmark, openTab, tinyPng } from "./helpers";
 
 test("v4: photo drops show for 10s per open, drop owners, everyone on the map, doodle undo/redo, sound choice remembered", async ({ browser }) => {
   test.setTimeout(200_000);
@@ -52,7 +52,8 @@ test("v4: photo drops show for 10s per open, drop owners, everyone on the map, d
   await nova.getByRole("button", { name: "CLOSE", exact: true }).click();
 
   // Doodle: draw a stroke, undo it, redo it.
-  await openTab(nova, "PLAY");
+  await openTab(nova, "MAP");
+  await openLandmark(nova, "INK ALLEY");
   const pad = nova.getByLabel("Shared drawing pad");
   await pad.scrollIntoViewIfNeeded();
   const r = (await pad.boundingBox())!;

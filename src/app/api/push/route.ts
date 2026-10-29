@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { notifyPartner } from "@/lib/push-server";
+import { notifyPartner, notifyRoomDaily } from "@/lib/push-server";
+import { sparkDay } from "@/lib/spark";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import type { PushEvent } from "@/lib/push-text";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = new Set(["messages", "pokes", "signal_drops", "spark_answers", "games"]);
+const TYPES = new Set(["messages", "pokes", "signal_drops", "spark_answers", "games", "daily_answers", "race_runs", "daily"]);
 const UUID = /^[0-9a-f-]{36}$/i;
 
 /** Called by the database (pg_net) after inserts. Authenticated by a shared secret. */
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
   const type = String(body.type ?? "");
   const room_id = String(body.room_id ?? "");
   const from = String(body.from ?? "");
+  if (type === "daily" && UUID.test(room_id)) {
+    return NextResponse.json(await notifyRoomDaily(room_id, sparkDay()));
+  }
   if (!TYPES.has(type) || !UUID.test(room_id) || !UUID.test(from)) {
     return NextResponse.json({ error: "BAD_REQUEST" }, { status: 400 });
   }

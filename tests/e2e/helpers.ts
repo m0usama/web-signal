@@ -45,3 +45,11 @@ export function tinyPng(): Buffer {
     "base64",
   );
 }
+
+/** Opens a City Quests landmark on the map (it may be off-screen, so click it directly). */
+export async function openLandmark(page: Page, name: string) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await page.getByRole("button", { name: new RegExp(`^${esc}:`) }).evaluate((el: HTMLElement) => el.click());
+  await expect(page.getByRole("dialog", { name })).toBeVisible();
+  return page.getByRole("dialog", { name });
+}

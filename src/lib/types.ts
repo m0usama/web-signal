@@ -27,11 +27,15 @@ export interface SparkAnswer {
   created_at: string;
 }
 
+export type GameKind = "ttt" | "web4" | "memory" | "hotcold" | "word";
+
 export interface Game {
   id: string;
   room_id: string;
-  kind: "ttt";
+  kind: GameKind;
   board: string;
+  /** Public game info (scores, guesses, hints…). Hidden things stay on the server. */
+  state?: Record<string, unknown>;
   x_player: string;
   o_player: string;
   turn: string | null;
@@ -143,4 +147,28 @@ export interface Bootstrap {
   initialTab?: Tab;
   /** This chat is messages only. */
   chatOnly?: boolean;
+}
+
+export interface DailyAnswer {
+  room_id: string;
+  day: string;
+  kind: "trivia" | "tot";
+  user_id: string;
+  answers: number[];
+  score: number;
+  created_at: string;
+}
+
+export interface RaceRun {
+  id: string;
+  room_id: string;
+  user_id: string;
+  day: string;
+  ms: number;
+  created_at: string;
+}
+
+export interface HeroScore {
+  user_id: string;
+  points: number;
 }

@@ -451,5 +451,87 @@ select t.throws($$select public.set_countdown((select v::uuid from ctx where k='
 select t.throws($$select public.set_chat_only('nova@example.com', 'stranger@example.com', false)$$, 'permission denied', 'people cannot change chat-only');
 reset role;
 
+-- ================================================================== City Quests
+-- (main room: nova = A, night = B)
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001');
+set local role authenticated;
+-- Web Four: A wins with four in the bottom row
+insert into ctx select 'w4', (public.web4_new((select v::uuid from ctx where k = 'room'))).id::text;
+select public.web4_move((select v::uuid from ctx where k = 'w4'), 0);
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select t.ok((select substr((public.web4_move((select v::uuid from ctx where k = 'w4'), 0)).board, 29, 1) = 'O'), 'web four discs stack in a column');
+reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select public.web4_move((select v::uuid from ctx where k = 'w4'), 1);
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select public.web4_move((select v::uuid from ctx where k = 'w4'), 1);
+reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select public.web4_move((select v::uuid from ctx where k = 'w4'), 2);
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select public.web4_move((select v::uuid from ctx where k = 'w4'), 2);
+reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select t.ok((select (public.web4_move((select v::uuid from ctx where k = 'w4'), 3)).winner = 'X'), 'four in a row wins web four');
+select t.ok((select sum(points) >= 3 from public.hero_points where user_id = auth.uid() and reason = 'web4 win'), 'the winner gets hero points');
+select t.throws($$select public.web4_move((select v::uuid from ctx where k='w4'), 4)$$, 'GAME_OVER', 'no moves after web four ends');
+
+-- Memory: the layout stays secret
+insert into ctx select 'mem', (public.memory_new((select v::uuid from ctx where k = 'room'))).id::text;
+select t.throws($$select * from private.game_secrets$$, 'permission denied', 'the memory layout is hidden');
+select t.ok((select (public.memory_flip((select v::uuid from ctx where k = 'mem'), 0)).state ? 'peek'), 'first flip shows one card');
+reset role;
+
+-- Hot & cold: A hides, B seeks
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+insert into ctx select 'hc', (public.hotcold_new((select v::uuid from ctx where k = 'room'), 0.5, 0.5)).id::text;
+select t.throws($$select public.hotcold_guess((select v::uuid from ctx where k='hc'), 0.1, 0.1)$$, 'NOT_YOUR_TURN', 'the hider cannot guess');
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select t.ok((select (public.hotcold_guess((select v::uuid from ctx where k = 'hc'), 0.1, 0.1)).state -> 'guesses' -> 0 ->> 'hint' = 'COLD'), 'far away is cold');
+select t.ok((select not ((public.hotcold_guess((select v::uuid from ctx where k = 'hc'), 0.45, 0.47)).state ? 'spot')), 'the spot stays hidden while seeking');
+select t.ok((select (public.hotcold_guess((select v::uuid from ctx where k = 'hc'), 0.5, 0.51)).winner = 'O'), 'finding the spot wins');
+reset role;
+
+-- Word guess: A sets, B guesses
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select t.throws($$select public.word_new((select v::uuid from ctx where k='room'), 'x1')$$, 'BAD_WORD', 'secret words are letters only');
+insert into ctx select 'wd', (public.word_new((select v::uuid from ctx where k = 'room'), 'web')).id::text;
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select t.ok((select (public.word_guess((select v::uuid from ctx where k = 'wd'), 'w')).board = 'W__'), 'a right letter is revealed');
+select t.ok((select ((public.word_guess((select v::uuid from ctx where k = 'wd'), 'z')).state ->> 'misses')::int = 1), 'a wrong letter is a miss');
+select t.throws($$select public.word_guess((select v::uuid from ctx where k='wd'), 'z')$$, 'BAD_MOVE', 'no guessing the same letter twice');
+select public.word_guess((select v::uuid from ctx where k = 'wd'), 'e');
+select t.ok((select (public.word_guess((select v::uuid from ctx where k = 'wd'), 'b')).winner = 'O'), 'guessing the word wins');
+
+-- Daily trivia: partner's answers hidden until you answer
+insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k = 'room'), 'trivia', '[1,2,0,3,1]', 4);
+reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select t.ok((select count(*) = 0 from public.daily_answers where kind = 'trivia'), 'partner trivia answers hidden until you answer');
+insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k = 'room'), 'trivia', '[1,2,0,0,0]', 3);
+select t.ok((select count(*) = 2 from public.daily_answers where kind = 'trivia'), 'both trivia answers visible once both answered');
+select t.throws($$insert into public.daily_answers (room_id, kind, answers, score) values ((select v::uuid from ctx where k='room'), 'trivia', '[1]', 1)$$, 'duplicate', 'one trivia round per day');
+-- This or That: matching picks give points to both
+insert into public.daily_answers (room_id, kind, answers) values ((select v::uuid from ctx where k = 'room'), 'tot', '[0,1,0,1]');
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+insert into public.daily_answers (room_id, kind, answers) values ((select v::uuid from ctx where k = 'room'), 'tot', '[0,1,1,1]');
+select t.ok((select count(*) = 2 from public.hero_points where reason = 'this or that'), 'this or that matches score for both');
+
+-- Race: beating the other's best today scores once
+select public.race_submit((select v::uuid from ctx where k = 'room'), 30000);
+reset role; select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+select public.race_submit((select v::uuid from ctx where k = 'room'), 25000);
+select public.race_submit((select v::uuid from ctx where k = 'room'), 24000);
+select t.ok((select count(*) = 1 from public.hero_points where user_id = auth.uid() and reason like 'race %'), 'beating their race time scores once a day');
+select t.throws($$select public.race_submit((select v::uuid from ctx where k='room'), 10)$$, 'race_runs_ms_check|check', 'impossible race times are refused');
+select t.ok((select count(*) = 2 from public.hero_scores((select v::uuid from ctx where k = 'room'), now() - interval '7 days')), 'weekly scoreboard has both people');
+select t.throws($$insert into public.hero_points (room_id, user_id, points, reason) values ((select v::uuid from ctx where k='room'), auth.uid(), 50, 'cheat')$$, 'permission denied', 'people cannot add their own points');
+-- Nothing in chat-only rooms
+select t.throws($$select public.web4_new((select v::uuid from ctx where k='room2'))$$, 'CHAT_ONLY', 'no games in a chat-only room');
+select t.throws($$select public.race_submit((select v::uuid from ctx where k='room2'), 30000)$$, 'CHAT_ONLY', 'no races in a chat-only room');
+reset role;
+
+-- outsider
+select t.as_user('cccccccc-0000-0000-0000-000000000003'); set local role authenticated;
+select t.ok((select count(*) = 0 from public.hero_points where room_id = (select v::uuid from ctx where k = 'room')), 'others cannot see your points');
+select t.ok((select count(*) = 0 from public.race_runs where room_id = (select v::uuid from ctx where k = 'room')), 'others cannot see your races');
+reset role;
+
 rollback;
 \echo 'ALL DATABASE SECURITY TESTS PASSED'

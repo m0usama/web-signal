@@ -44,31 +44,11 @@ export async function vapidPublicKey(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
-/**
- * Sends a notification about `event` (made by `fromUserId`) to the other
- * person in the room. Skipped while they have the app open on screen.
- */
-export async function notifyPartner(event: PushEvent & { room_id: string; from: string }): Promise<{ sent: number; skipped?: string }> {
-  if (!(await configure())) return { sent: 0, skipped: "not configured" };
+/** Sends `text` to every device of `userId`; prunes dead subscriptions. */
+async function sendTo(userId: string, text: { title: string; body: string; tag: string }): Promise<number> {
   const admin = getAdminSupabase();
-
-  const { data: members } = await admin.from("room_members").select("user_id").eq("room_id", event.room_id);
-  const ids = (members ?? []).map((m) => m.user_id as string);
-  if (!ids.includes(event.from)) return { sent: 0, skipped: "sender not in room" };
-  const to = ids.find((id) => id !== event.from);
-  if (!to) return { sent: 0, skipped: "no partner" };
-
-  const { data: people } = await admin.from("profiles").select("id, display_name, foreground, last_seen_at").in("id", [event.from, to]);
-  const sender = people?.find((p) => p.id === event.from);
-  const recipient = people?.find((p) => p.id === to);
-  const activeNow =
-    recipient?.foreground && recipient.last_seen_at && Date.now() - Date.parse(recipient.last_seen_at as string) < 60_000;
-  if (activeNow && event.type !== "tune") return { sent: 0, skipped: "recipient has the app open" };
-
-  const { data: subs } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", to);
-  if (!subs?.length) return { sent: 0, skipped: "no devices" };
-
-  const text = pushText(event, (sender?.display_name as string) ?? "WEB//SIGNAL");
+  const { data: subs } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", userId);
+  if (!subs?.length) return 0;
   const payload = JSON.stringify({ ...text, url: "/" });
   let sent = 0;
   await Promise.all(
@@ -86,5 +66,51 @@ export async function notifyPartner(event: PushEvent & { room_id: string; from: 
       }
     }),
   );
+  return sent;
+}
+
+function inAppNow(p: { foreground?: unknown; last_seen_at?: unknown } | undefined) {
+  return !!p?.foreground && !!p.last_seen_at && Date.now() - Date.parse(p.last_seen_at as string) < 60_000;
+}
+
+/**
+ * Sends a notification about `event` (made by `fromUserId`) to the other
+ * person in the room. Skipped while they have the app open on screen.
+ */
+export async function notifyPartner(event: PushEvent & { room_id: string; from: string }): Promise<{ sent: number; skipped?: string }> {
+  if (!(await configure())) return { sent: 0, skipped: "not configured" };
+  const admin = getAdminSupabase();
+
+  const { data: members } = await admin.from("room_members").select("user_id").eq("room_id", event.room_id);
+  const ids = (members ?? []).map((m) => m.user_id as string);
+  if (!ids.includes(event.from)) return { sent: 0, skipped: "sender not in room" };
+  const to = ids.find((id) => id !== event.from);
+  if (!to) return { sent: 0, skipped: "no partner" };
+
+  const { data: people } = await admin.from("profiles").select("id, display_name, foreground, last_seen_at").in("id", [event.from, to]);
+  const sender = people?.find((p) => p.id === event.from);
+  const recipient = people?.find((p) => p.id === to);
+  if (inAppNow(recipient) && event.type !== "tune") return { sent: 0, skipped: "recipient has the app open" };
+
+  const sent = await sendTo(to, pushText(event, (sender?.display_name as string) ?? "WEB//SIGNAL"));
+  return sent ? { sent } : { sent: 0, skipped: "no devices" };
+}
+
+/** Daily reminder to everyone in the room who hasn't played today's trivia yet. */
+export async function notifyRoomDaily(roomId: string, day: string): Promise<{ sent: number }> {
+  if (!(await configure())) return { sent: 0 };
+  const admin = getAdminSupabase();
+  const { data: room } = await admin.from("private_rooms").select("chat_only").eq("id", roomId).maybeSingle();
+  if (!room || room.chat_only) return { sent: 0 };
+  const { data: members } = await admin.from("room_members").select("user_id").eq("room_id", roomId);
+  const ids = (members ?? []).map((m) => m.user_id as string);
+  const { data: done } = await admin.from("daily_answers").select("user_id").eq("room_id", roomId).eq("day", day).eq("kind", "trivia");
+  const { data: people } = await admin.from("profiles").select("id, foreground, last_seen_at").in("id", ids);
+  let sent = 0;
+  for (const id of ids) {
+    if (done?.some((d) => d.user_id === id)) continue;
+    if (inAppNow(people?.find((p) => p.id === id))) continue;
+    sent += await sendTo(id, pushText({ type: "daily" }, "WEB//SIGNAL"));
+  }
   return { sent };
 }

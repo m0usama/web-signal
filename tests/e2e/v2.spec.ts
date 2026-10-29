@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { enterApp, login, NIGHT, NOVA, openTab } from "./helpers";
+import { enterApp, login, NIGHT, NOVA, openLandmark, openTab } from "./helpers";
 
 test("v2: moods, daily spark, rooftop tic-tac-toe and a walkie-talkie voice note", async ({ browser }) => {
   test.setTimeout(240_000);
@@ -30,22 +30,24 @@ test("v2: moods, daily spark, rooftop tic-tac-toe and a walkie-talkie voice note
   await expect(nova.getByText("sunset by the river")).toBeVisible({ timeout: 15_000 });
 
   // Rooftop tic-tac-toe: Nova (X) wins across the top row.
-  await openTab(nova, "PLAY");
-  await openTab(night, "PLAY");
-  const novaCell = (i: number) => nova.getByRole("gridcell").nth(i);
-  const nightCell = (i: number) => night.getByRole("gridcell").nth(i);
-  await nova.getByRole("button", { name: /NEW GAME|REMATCH/ }).click();
+  const novaSheet = await openLandmark(nova, "THWIP TOWER");
+  const nightSheet = await openLandmark(night, "THWIP TOWER");
+  const novaCell = (i: number) => novaSheet.getByRole("gridcell").nth(i);
+  const nightCell = (i: number) => nightSheet.getByRole("gridcell").nth(i);
+  await novaSheet.getByRole("button", { name: /NEW GAME|REMATCH/ }).click();
   await novaCell(0).click();
-  await expect(night.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
+  await expect(nightSheet.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
   await nightCell(4).click();
-  await expect(nova.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
+  await expect(novaSheet.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
   await novaCell(1).click();
-  await expect(night.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
+  await expect(nightSheet.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
   await nightCell(8).click();
-  await expect(nova.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
+  await expect(novaSheet.getByText("YOUR MOVE")).toBeVisible({ timeout: 15_000 });
   await novaCell(2).click();
-  await expect(nova.getByText("YOU WIN! 🏆")).toBeVisible();
-  await expect(night.getByText(/WINS!/)).toBeVisible({ timeout: 15_000 });
+  await expect(novaSheet.getByText("YOU WIN! 🏆")).toBeVisible();
+  await expect(nightSheet.getByText(/WINS!/)).toBeVisible({ timeout: 15_000 });
+  await novaSheet.getByRole("button", { name: "Close" }).click();
+  await nightSheet.getByRole("button", { name: "Close" }).click();
 
   // Voice note: hold TALK for ~1.5s, release; Night receives a voice signal.
   await openTab(nova, "COMMS");
