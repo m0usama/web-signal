@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { enterApp, login, NIGHT, NOVA, openTab, PASSWORD, STRANGER, tinyPng } from "./helpers";
 
-test.describe.configure({ mode: "serial" });
-
 test("logged-out visitors only see the login screen @smoke", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login$/);
@@ -14,7 +12,9 @@ test("wrong password is rejected @smoke", async ({ page }) => {
   await page.getByLabel("EMAIL").fill(NOVA);
   await page.getByLabel("PASSWORD").fill("not-the-password");
   await page.getByRole("button", { name: /JACK IN/ }).click();
-  await expect(page.locator(".form-error")).toHaveText(/WRONG EMAIL OR PASSWORD/);
+  await page.locator(".form-error").waitFor();
+  const detail = await page.locator(".login-detail").textContent({ timeout: 1000 }).catch(() => "");
+  expect(await page.locator(".form-error").textContent(), `login detail: ${detail}`).toMatch(/WRONG EMAIL OR PASSWORD/);
 });
 
 test("media API refuses anonymous requests", async ({ request }) => {

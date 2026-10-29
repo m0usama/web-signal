@@ -68,7 +68,7 @@ jobs:
 
       - name: End-to-end tests
         env:
-          CI_SUMMARY: "✘|✓|passed|failed|flaky|did not run|Error:|Expected|Received|login-detail|COULDN"
+          CI_SUMMARY: "✘|✓|passed|failed|flaky|did not run|Error:|Expected|Received|login detail|COULDN"
         run: scripts/ci-run.sh e2e npx playwright test --reporter=list
 
       - name: Cleanup job works against real Storage
