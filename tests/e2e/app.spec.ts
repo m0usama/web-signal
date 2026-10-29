@@ -42,8 +42,8 @@ test("the map loads on a phone @smoke", async ({ page }) => {
 
 test("two people: presence, messages, pokes, drops and a ghost photo", async ({ browser }) => {
   test.setTimeout(240_000);
-  const nova = await (await browser.newContext()).newPage();
-  const night = await (await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })).newPage();
+  const nova = await (await browser.newContext({ reducedMotion: "reduce" })).newPage();
+  const night = await (await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: "reduce" })).newPage();
 
   await login(nova, NOVA);
   await enterApp(nova);
@@ -76,7 +76,7 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await nova.getByRole("button", { name: "▼ DROP", exact: true }).click();
   const box = await nova.locator(".map-viewport").boundingBox();
   // Pick an empty rooftop: away from the avatars and any drops from an earlier attempt.
-  await nova.mouse.click(box!.x + box!.width * (0.25 + Math.random() * 0.1), box!.y + box!.height * (0.68 + Math.random() * 0.1));
+  await nova.mouse.click(box!.x + box!.width * (0.42 + Math.random() * 0.1), box!.y + box!.height * (0.45 + Math.random() * 0.1));
   await nova.getByLabel("Note").fill("meet me on this roof");
   await nova.getByRole("button", { name: /DROP IT/ }).click();
   await expect(nova.getByText("SIGNAL DROPPED ON THE MAP")).toBeVisible();

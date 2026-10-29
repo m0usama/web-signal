@@ -13,6 +13,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
+    // Endless decorative animations (wobble, pulse) never look "stable" to Playwright.
+    reducedMotion: "reduce",
     screenshot: "only-on-failure",
   },
   projects: [

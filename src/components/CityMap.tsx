@@ -302,7 +302,6 @@ export function CityMap(props: Props) {
                 key={p.id}
                 className={`avatar-pin ${online ? "online" : "offline"} ${isMe ? "me" : "them"} ${props.celebrate ? "celebrate" : ""}`}
                 style={{ left: p.map_x * CITY_W, top: p.map_y * CITY_H }}
-                data-interactive
               >
                 <div className="pin-scale">
                   {bubble && (

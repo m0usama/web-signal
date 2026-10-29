@@ -714,6 +714,7 @@ select.mode-chip {
   width: 0;
   height: 0;
   z-index: 3;
+  pointer-events: none; /* taps go through to the map (drops, moving) */
 }
 
 .avatar-pin.me {
