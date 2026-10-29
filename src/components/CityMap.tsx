@@ -26,6 +26,8 @@ export interface Flight {
 interface Props {
   me: Profile;
   partner: Profile;
+  /** Other people you chat with (shown on the map too, a little dimmer). */
+  others?: { profile: Profile; online: boolean }[];
   partnerOnline: boolean;
   partnerTyping: boolean;
   partnerView: string | null;
@@ -212,8 +214,11 @@ export function CityMap(props: Props) {
     () => [
       { p: props.me, online: true, isMe: true },
       { p: props.partner, online: props.partnerOnline, isMe: false },
+      ...(props.others ?? [])
+        .filter((o) => o.profile.id !== props.me.id && o.profile.id !== props.partner.id)
+        .map((o) => ({ p: o.profile, online: o.online, isMe: false, other: true })),
     ],
-    [props.me, props.partner, props.partnerOnline],
+    [props.me, props.partner, props.partnerOnline, props.others],
   );
 
   const posOf = (id: string) => {
@@ -270,6 +275,7 @@ export function CityMap(props: Props) {
           {props.drops.map((d) => {
             const mine = d.sender_id === props.me.id;
             const fresh = !mine && !d.opened_at;
+            const owner = mine ? props.me : props.partner;
             return (
               <button
                 key={d.id}
@@ -278,12 +284,21 @@ export function CityMap(props: Props) {
                 className={`drop-marker ${mine ? "mine" : "theirs"} ${fresh ? "fresh" : ""} ${d.mode}`}
                 style={{ left: d.x * CITY_W, top: d.y * CITY_H }}
                 onClick={() => props.onOpenDrop(d)}
-                aria-label={mine ? `Your signal drop${d.opened_at ? ", opened" : ""}` : "Signal drop from your person. Tap to open."}
+                aria-label={
+                  mine
+                    ? `Your signal drop${d.opened_at ? ", opened" : ""}`
+                    : `Signal drop from ${owner.display_name}. Tap to open.`
+                }
               >
                 <span className="drop-core">
-                  <Icon name={d.sticker ?? (d.mode === "ghost" ? "ghost" : "star")} size={16} />
+                  <Icon name={d.sticker ?? (d.media_path ? "camera" : d.mode === "ghost" ? "ghost" : "star")} size={16} />
                 </span>
-                {mine && <span className="drop-tag">{d.opened_at ? "OPENED" : "WAITING"}</span>}
+                <span className="drop-owner" aria-hidden>
+                  <Avatar avatarKey={owner.avatar_key} size={14} />
+                </span>
+                <span className="drop-tag">
+                  {mine ? `YOU · ${d.opened_at ? "OPENED" : "WAITING"}` : `FROM ${owner.display_name}`}
+                </span>
               </button>
             );
           })}
@@ -296,12 +311,16 @@ export function CityMap(props: Props) {
           })}
 
           {/* avatars */}
-          {people.map(({ p, online, isMe }) => {
-            const bubble = [...props.bubbles].reverse().find((b) => b.userId === p.id);
+          {people.map((entry) => {
+            const { p, isMe } = entry;
+            const other = "other" in entry && entry.other;
+            const online = entry.online;
+            const bubble = other ? undefined : [...props.bubbles].reverse().find((b) => b.userId === p.id);
+            const partnerTyping = !other && props.partnerTyping;
             return (
               <div
                 key={p.id}
-                className={`avatar-pin ${online ? "online" : "offline"} ${isMe ? "me" : "them"} ${props.celebrate ? "celebrate" : ""}`}
+                className={`avatar-pin ${online ? "online" : "offline"} ${isMe ? "me" : other ? "other" : "them"} ${props.celebrate && !other ? "celebrate" : ""}`}
                 style={{ left: p.map_x * CITY_W, top: p.map_y * CITY_H }}
               >
                 <div className="pin-scale">
@@ -310,8 +329,8 @@ export function CityMap(props: Props) {
                       {bubble.text}
                     </div>
                   )}
-                  {!isMe && props.partnerTyping && !bubble && <div className="speech typing">…</div>}
-                  {!bubble && !(!isMe && props.partnerTyping) && moodInfo(p.mood) && (
+                  {!isMe && partnerTyping && !bubble && <div className="speech typing">…</div>}
+                  {!bubble && !(!isMe && partnerTyping) && moodInfo(p.mood) && (
                     <div className="mood-bubble" title={moodInfo(p.mood)!.label}>
                       {moodInfo(p.mood)!.emoji}
                     </div>
@@ -325,7 +344,7 @@ export function CityMap(props: Props) {
                     {isMe && <span className="you"> (YOU)</span>}
                   </div>
                   {!isMe && !online && <div className="pin-sub">LAST SEEN {formatLastSeen(p.last_seen_at)}</div>}
-                  {!isMe && online && props.partnerView && props.partnerView !== "map" && (
+                  {!isMe && !other && online && props.partnerView && props.partnerView !== "map" && (
                     <div className="pin-sub">IN {props.partnerView.toUpperCase()}</div>
                   )}
                 </div>

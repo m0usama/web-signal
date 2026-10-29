@@ -3,6 +3,7 @@
 import { formatLastSeen, formatLeft, msLeft } from "@/lib/expiry";
 import { BADGES, POKES } from "@/lib/pixels";
 import type { Badge, Poke, PokeKind, Profile, SignalDrop } from "@/lib/types";
+import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
 export function Signals({
@@ -76,10 +77,16 @@ export function Signals({
           const left = msLeft(d);
           return (
             <li key={d.id} className={`drop-row ${mine ? "mine" : "theirs"}`}>
-              <Icon name={d.sticker ?? (d.mode === "ghost" ? "ghost" : "star")} size={24} />
+              <span className="drop-row-art">
+                <Icon name={d.sticker ?? (d.media_path ? "camera" : d.mode === "ghost" ? "ghost" : "star")} size={24} />
+                <span className="drop-owner">
+                  <Avatar avatarKey={(mine ? me : partner).avatar_key} size={14} />
+                </span>
+              </span>
               <div className="grow">
                 <strong>{mine ? "YOUR DROP" : `FROM ${partner.display_name}`}</strong>
                 <span>
+                  {d.media_path ? "📷 PHOTO · " : ""}
                   {d.mode === "ghost" ? "GHOST" : "24H"}
                   {d.opened_at ? " · OPENED" : mine ? " · WAITING" : " · NEW!"}
                   {left !== null && ` · ${formatLeft(left)} LEFT`}

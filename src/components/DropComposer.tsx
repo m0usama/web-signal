@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { STICKERS } from "@/lib/pixels";
 import { validateFile } from "@/lib/upload";
 import { Icon } from "./Icon";
+import { DROP_PHOTO_SECONDS } from "./Reveal";
 
 export interface DropDraft {
   body: string;
@@ -33,6 +34,13 @@ export function DropComposer({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const ready = body.trim().length > 0 || sticker || file;
+  const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
 
   return (
     <div className="sheet drop-sheet" role="dialog" aria-label="New signal drop">
@@ -62,9 +70,12 @@ export function DropComposer({
           </button>
         ))}
       </div>
-      <div className="row-between">
+      <div className="row-between drop-photo-row">
+        {preview ? (
+          <img src={preview} alt="Photo for this drop" className="drop-photo-preview" />
+        ) : null}
         <button type="button" className="btn btn-orange" onClick={() => fileRef.current?.click()}>
-          {file ? `✓ ${file.type === "image/gif" ? "GIF" : "PHOTO"} ADDED` : "+ PHOTO / GIF"}
+          {file ? "📷 CHANGE PHOTO" : "📷 ADD A PHOTO"}
         </button>
         {file && (
           <button type="button" className="link-btn" onClick={() => setFile(null)}>
@@ -96,7 +107,7 @@ export function DropComposer({
             👻 GHOST
           </button>
         </div>
-        {mode === "ghost" && (
+        {mode === "ghost" && !file && (
           <select className="mode-chip" value={ghostSeconds} onChange={(e) => setGhostSeconds(Number(e.target.value))} aria-label="Viewing time">
             {[5, 10, 20, 30].map((s) => (
               <option key={s} value={s}>
@@ -108,6 +119,7 @@ export function DropComposer({
       </div>
       <p className="fine">
         {mode === "day" ? "Disappears 24 hours after you drop it." : "Disappears after one look (or 24h if never opened)."}
+        {file ? ` The photo shows for ${DROP_PHOTO_SECONDS} seconds each time it's opened.` : ""}
       </p>
       {problem && <p className="form-error">{problem}</p>}
       <div className="row-between">
@@ -118,7 +130,7 @@ export function DropComposer({
           type="button"
           className="btn btn-coral"
           disabled={!ready || busy}
-          onClick={() => onSubmit({ body, sticker, file, mode, ghostSeconds })}
+          onClick={() => onSubmit({ body, sticker, file, mode, ghostSeconds: file ? DROP_PHOTO_SECONDS : ghostSeconds })}
         >
           {busy ? "DROPPING…" : "DROP IT ▼"}
         </button>

@@ -121,6 +121,10 @@ export const ICONS: Record<string, Sprite> = {
     palette: { k: INK, w: "#F8F5FF", b: "#9CD9FF" },
     grid: ["w...w...w", ".w..w..w.", "..wbwbw..", ".wbw.wbw.", "wwww.wwww", ".wbw.wbw.", "..wbwbw..", ".w..w..w.", "w...w...w"],
   },
+  camera: {
+    palette: { k: INK, o: "#FFB347", w: "#F8F5FF", b: "#169FE8" },
+    grid: ["...kkk....", "kkkoookkk.", "koooooook.", "kookkkook.", "kokbwbkok.", "kokbbbkok.", "kookkkook.", "koooooook.", "kkkkkkkkk."],
+  },
   ghost: {
     palette: { k: INK, w: "#F8F5FF", v: "#A75CFF" },
     grid: ["..kkkkk..", ".kwwwwwk.", "kwwwwwwwk", "kwvwwwvwk", "kwvwwwvwk", "kwwwwwwwk", "kwwwwwwwk", "kwkwkwkwk", ".k.k.k.k."],

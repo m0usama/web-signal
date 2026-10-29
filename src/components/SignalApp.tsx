@@ -38,6 +38,33 @@ function readSession(key: string): boolean {
   }
 }
 
+/** "on" | "off" — the last sound choice on this device (kept across app launches). */
+const SOUND_CHOICE_KEY = "ws-sound-choice";
+function readSoundChoice(): "on" | "off" | null {
+  try {
+    const v = localStorage.getItem(SOUND_CHOICE_KEY);
+    return v === "on" || v === "off" ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writeSoundChoice(v: "on" | "off") {
+  try {
+    localStorage.setItem(SOUND_CHOICE_KEY, v);
+  } catch {
+    /* storage blocked */
+  }
+}
+
+function useNow(everyMs: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), everyMs);
+    return () => clearInterval(t);
+  }, [everyMs]);
+  return now;
+}
+
 function writeSession(key: string) {
   try {
     sessionStorage.setItem(key, "1");
@@ -76,10 +103,12 @@ export function SignalApp({
   onSwitch?: (roomId: string, tab: Tab) => void;
 }) {
   const [tab, setTab] = useState<Tab>(boot.initialTab ?? "map");
+  const now = useNow(20_000);
   // This component only renders in the browser (see ClientApp), so storage is safe to read here.
   const [introDone, setIntroDone] = useState(() => readSession(INTRO_KEY));
-  const [soundPrompt, setSoundPrompt] = useState(() => !readSession(SOUND_PROMPT_KEY));
-  const [soundUnlocked, setSoundUnlocked] = useState(false);
+  // Only ask about sound once per device; after that the last choice is remembered.
+  const [soundPrompt, setSoundPrompt] = useState(() => readSoundChoice() === null && !readSession(SOUND_PROMPT_KEY));
+  const [soundUnlocked, setSoundUnlocked] = useState(() => synth.context?.state === "running");
   const [mapMode, setMapMode] = useState<MapMode>("browse");
   const [pendingDrop, setPendingDrop] = useState<{ x: number; y: number; building?: Building } | null>(null);
   const [dropBusy, setDropBusy] = useState(false);
@@ -290,11 +319,39 @@ export function SignalApp({
     synth.setVolume(room.settings.volume);
   }, [room.settings.sound_on, room.settings.volume, soundUnlocked]);
 
+  // Sound was switched on before: browsers still need one tap per launch to
+  // allow audio, so the first tap anywhere quietly turns it back on.
+  useEffect(() => {
+    if (soundUnlocked || readSoundChoice() !== "on") return;
+    let done = false;
+    const wake = () => {
+      if (done) return;
+      void synth.unlock().then((ok) => {
+        if (ok) {
+          done = true;
+          setSoundUnlocked(true);
+          remove();
+        }
+      });
+    };
+    const remove = () => {
+      window.removeEventListener("pointerdown", wake, true);
+      window.removeEventListener("keydown", wake, true);
+      window.removeEventListener("touchend", wake, true);
+    };
+    window.addEventListener("pointerdown", wake, true);
+    window.addEventListener("keydown", wake, true);
+    window.addEventListener("touchend", wake, true);
+    wake(); // works straight away where the browser allows it
+    return remove;
+  }, [soundUnlocked]);
+
   const enableSound = useCallback(async () => {
     const ok = await synth.unlock();
     setSoundUnlocked(ok);
     setSoundPrompt(false);
     writeSession(SOUND_PROMPT_KEY);
+    writeSoundChoice("on");
     if (ok) {
       synth.enabled = true;
       if (!room.settings.sound_on) void room.actions.saveSettings({ sound_on: true });
@@ -447,6 +504,12 @@ export function SignalApp({
   const night = room.settings.theme === "night" || (room.settings.theme === "auto" && (hour < 7 || hour >= 19));
   // Golden-hour glow around the switch (auto theme only): 6–7am sunrise, 6–7pm sunset.
   const dusk = room.settings.theme === "auto" && (hour === 6 || hour === 18);
+  const others = contacts
+    .filter((c) => c.partner.id !== room.partner.id)
+    .map((c) => ({
+      profile: c.partner,
+      online: !!c.partner.foreground && !!c.partner.last_seen_at && now - Date.parse(c.partner.last_seen_at) < 60_000,
+    }));
   const newDrops = room.drops.filter((d) => d.sender_id !== boot.me.id && !d.opened_at).length;
 
   return (
@@ -477,6 +540,7 @@ export function SignalApp({
           <CityMap
             me={room.me}
             partner={room.partner}
+            others={others}
             partnerOnline={room.partnerInApp}
             partnerTyping={room.presence.typing}
             partnerView={room.presence.view}
@@ -700,6 +764,7 @@ export function SignalApp({
               onClick={() => {
                 setSoundPrompt(false);
                 writeSession(SOUND_PROMPT_KEY);
+                writeSoundChoice("off");
               }}
             >
               NOT NOW

@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { GhostVoicePlayer } from "./Voice";
 
+/** How long a drop's photo stays on screen each time it's opened. */
+export const DROP_PHOTO_SECONDS = 10;
+
 export interface RevealTarget {
   type: "message" | "drop";
   id: string;
@@ -87,6 +90,24 @@ export function Reveal({
     };
   }, [target.type, target.id, reduced]);
 
+  // Drop photos (24h drops) are visible for 10 seconds each time they're opened.
+  const [photoGone, setPhotoGone] = useState(false);
+  useEffect(() => {
+    if (state !== "show" || target.type !== "drop" || data?.mode === "ghost" || !data?.url || data.kind === "voice") return;
+    const end = Date.now() + DROP_PHOTO_SECONDS * 1000;
+    const tick = () => {
+      const ms = end - Date.now();
+      setLeft(Math.max(0, Math.ceil(ms / 1000)));
+      if (ms <= 0) {
+        setPhotoGone(true);
+        setData((d) => (d ? { ...d, url: null } : d));
+      }
+    };
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [state, target.type, data?.mode, data?.url, data?.kind]);
+
   // Ghost countdown: when it hits zero the content is removed for good.
   useEffect(() => {
     if (state !== "show" || !data?.viewUntil || data.mode !== "ghost") return;
@@ -119,7 +140,7 @@ export function Reveal({
       <div className="reveal-panel">
         <div className="reveal-head">
           <span className="lcd">{target.type === "drop" ? "SIGNAL DROP" : data?.kind === "voice" ? "GHOST VOICE" : "GHOST SIGNAL"} · FROM {target.mine ? "YOU" : target.fromName}</span>
-          {left !== null && state === "show" && <span className="reveal-count">{left}</span>}
+          {left !== null && state === "show" && !photoGone && <span className="reveal-count">{left}</span>}
         </div>
 
         {state === "loading" && <p className="reveal-msg lcd-blink">DECRYPTING…</p>}
@@ -157,9 +178,16 @@ export function Reveal({
                 draggable={false}
               />
             )}
+            {photoGone && (
+              <p className="reveal-msg">
+                📷 PHOTO FADED
+                <br />
+                <span className="fine">Open the drop again to see it for another {DROP_PHOTO_SECONDS}s.</span>
+              </p>
+            )}
             {data.sticker && <Icon name={data.sticker} size={96} />}
             {data.body && <p className="reveal-text">{data.body}</p>}
-            {!data.url && !data.sticker && !data.body && <p className="reveal-msg">(NOTHING LEFT TO SHOW)</p>}
+            {!data.url && !photoGone && !data.sticker && !data.body && <p className="reveal-msg">(NOTHING LEFT TO SHOW)</p>}
           </div>
         )}
 

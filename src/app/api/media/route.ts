@@ -89,7 +89,8 @@ export async function POST(request: Request) {
 
   let url: string | null = null;
   if (row.media_path) {
-    let ttl = NORMAL_TTL;
+    // Drop photos are shown for 10 seconds per open, so the link is short-lived too.
+    let ttl = body.type === "drop" ? 20 : NORMAL_TTL;
     if (row.mode === "ghost" && row.view_until) {
       const left = Math.ceil((Date.parse(row.view_until) - Date.now()) / 1000);
       if (left <= 0) return json({ error: "EXPIRED" }, 410);

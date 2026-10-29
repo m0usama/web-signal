@@ -47,7 +47,10 @@ export interface RoomEvents {
 
 export type DoodleEvent =
   | { t: "stroke"; id: string; color: string; size: number; pts: number[] }
-  | { t: "clear" };
+  | { t: "clear" }
+  /** Undo / redo: hide or show again a whole stroke (all its chunks). */
+  | { t: "hide"; id: string }
+  | { t: "show"; id: string };
 
 export interface PartnerPresence {
   online: boolean;

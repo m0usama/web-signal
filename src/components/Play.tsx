@@ -140,13 +140,45 @@ export function Doodle({ bus, partnerName, onSendImage }: { bus: DoodleBus; part
     const c = canvasRef.current;
     const g = ctx();
     if (!c || !g) return;
+    // Strokes hidden by undo (and not shown again by redo) are skipped.
+    const hidden = new Set<string>();
+    let start = 0;
+    bus.log.forEach((e, i) => {
+      if (e.t === "hide") hidden.add(e.id);
+      else if (e.t === "show") hidden.delete(e.id);
+      else if (e.t === "clear") {
+        start = i + 1;
+        hidden.clear();
+      }
+    });
     g.fillStyle = "#0C2552";
     g.fillRect(0, 0, c.width, c.height);
-    for (const e of bus.log) {
-      if (e.t === "clear") {
-        g.fillRect(0, 0, c.width, c.height);
-      } else drawStroke(g, e, c.width, c.height);
+    for (const e of bus.log.slice(start)) {
+      if (e.t === "stroke" && !hidden.has(e.id)) drawStroke(g, e, c.width, c.height);
     }
+  };
+
+  // My strokes, newest last, for undo; strokes I undid, for redo.
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  const emitLocal = (ev: DoodleEvent) => {
+    bus.log.push(ev);
+    bus.send(ev);
+    redraw();
+  };
+  const undo = () => {
+    const id = undoStack[undoStack.length - 1];
+    if (!id) return;
+    setUndoStack((s) => s.slice(0, -1));
+    setRedoStack((s) => [...s, id]);
+    emitLocal({ t: "hide", id });
+  };
+  const redo = () => {
+    const id = redoStack[redoStack.length - 1];
+    if (!id) return;
+    setRedoStack((s) => s.slice(0, -1));
+    setUndoStack((s) => [...s, id]);
+    emitLocal({ t: "show", id });
   };
 
   // Size the canvas to its box (sharp on retina) and replay what's been drawn.
@@ -173,8 +205,8 @@ export function Doodle({ bus, partnerName, onSendImage }: { bus: DoodleBus; part
         const c = canvasRef.current;
         const g = ctx();
         if (!c || !g) return;
-        if (e.t === "clear") redraw();
-        else drawStroke(g, e, c.width, c.height);
+        if (e.t === "stroke") drawStroke(g, e, c.width, c.height);
+        else redraw();
         setPartnerDrawing(true);
         if (partnerTimer.current) clearTimeout(partnerTimer.current);
         partnerTimer.current = setTimeout(() => setPartnerDrawing(false), 1200);
@@ -231,7 +263,12 @@ export function Doodle({ bus, partnerName, onSendImage }: { bus: DoodleBus; part
     if (flush.current) clearInterval(flush.current);
     flush.current = null;
     sendPending();
+    const id = drawing.current?.id;
     drawing.current = null;
+    if (id) {
+      setUndoStack((s) => [...s.slice(-49), id]);
+      setRedoStack([]);
+    }
   };
 
   return (
@@ -270,14 +307,21 @@ export function Doodle({ bus, partnerName, onSendImage }: { bus: DoodleBus; part
             </button>
           ))}
         </div>
+        <div className="seg">
+          <button type="button" onClick={undo} disabled={undoStack.length === 0} aria-label="Undo">
+            ↶
+          </button>
+          <button type="button" onClick={redo} disabled={redoStack.length === 0} aria-label="Redo">
+            ↷
+          </button>
+        </div>
         <button
           type="button"
           className="btn btn-ghost btn-mini"
           onClick={() => {
-            const ev: DoodleEvent = { t: "clear" };
-            bus.log.push(ev);
-            bus.send(ev);
-            redraw();
+            emitLocal({ t: "clear" });
+            setUndoStack([]);
+            setRedoStack([]);
           }}
         >
           CLEAR
