@@ -80,12 +80,14 @@ test("two people: presence, messages, pokes, drops and a ghost photo", async ({ 
   await nova.getByLabel("Note").fill("meet me on this roof");
   await nova.getByRole("button", { name: /DROP IT/ }).click();
   await expect(nova.getByText("SIGNAL DROPPED ON THE MAP")).toBeVisible();
-  const marker = night.locator(".drop-marker.theirs");
-  await expect(marker).toBeVisible();
-  await marker.click();
+  // The marker appears on Night's map (it may be off-screen, so open it from the list).
+  await expect(night.locator(".drop-marker.theirs").first()).toBeAttached();
+  await openTab(night, "SIGNALS");
+  await night.locator(".drop-row.theirs").first().getByRole("button", { name: "OPEN" }).click();
   await expect(night.getByText("meet me on this roof")).toBeVisible();
   await night.getByRole("button", { name: "CLOSE", exact: true }).click();
   await expect(nova.getByText(/OPENED YOUR DROP/)).toBeVisible();
+  await openTab(night, "MAP");
 
   // Ghost photo: one look, then gone for good.
   await openTab(nova, "COMMS");
