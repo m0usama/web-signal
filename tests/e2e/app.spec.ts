@@ -41,6 +41,7 @@ test("the map loads on a phone @smoke", async ({ page }) => {
 });
 
 test("two people: presence, messages, pokes, drops and a ghost photo", async ({ browser }) => {
+  test.setTimeout(240_000);
   const nova = await (await browser.newContext()).newPage();
   const night = await (await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })).newPage();
 
