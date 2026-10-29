@@ -12,6 +12,13 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await enterApp(night);
   await openTab(night, "COMMS");
   const nightChats = night.getByRole("navigation", { name: "Chats" });
+  await night.waitForTimeout(1500);
+  console.log(
+    "contacts debug:",
+    await night.locator(".contact-chip").count(),
+    JSON.stringify(await night.evaluate(() => document.querySelector(".panel")?.textContent?.slice(0, 200) ?? "no panel")),
+    JSON.stringify(await night.evaluate(() => document.querySelector(".lcd")?.textContent ?? "")),
+  );
   await expect(nightChats.getByRole("button", { name: /Chat with Nova/ })).toHaveAttribute("aria-current", "true");
 
   // Night opens the bot's chat and gets a cute auto-reply.

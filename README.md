@@ -96,6 +96,24 @@ insert into private.config (key, value) values
 on conflict (key) do update set value = excluded.value;
 ```
 
+### Extra people (e.g. a test account)
+
+Every chat is still a private room for exactly two people, but one person can be in several rooms. Anyone with more than one chat gets a row of people at the top of **COMMS**: tap someone to open your chat with them. A new signal in a chat that isn't open shows a banner and a badge. The app always opens on your first (oldest) chat.
+
+1. **Authentication → Users → Add user**: `jarvis@web-signal.local` with a password of 8+ characters (tick *Auto confirm*).
+2. In the SQL editor:
+
+```sql
+select public.add_person('jarvis@web-signal.local', 'J.A.R.V.I.S', 'c');        -- avatar c = public/avatars/c.png
+select public.link_room('spidey@web-signal.local', 'jarvis@web-signal.local');   -- a chat for testing
+select public.link_room('spiderziya@web-signal.local', 'jarvis@web-signal.local');
+-- Optional: J.A.R.V.I.S answers SpiderZiya (and only her) automatically, rotating these lines.
+select public.set_auto_reply('jarvis@web-signal.local', 'spiderziya@web-signal.local',
+  array['line one', 'line two', 'line three']);
+```
+
+Auto-replies come once per burst of messages (5-second cooldown). Passing an empty array turns them off. Nobody can see a chat they're not in: SpiderZiya never sees the Spidey–J.A.R.V.I.S chat, and the other way round.
+
 ### 4. Your tune (optional)
 
 **Storage → signal-tunes → Upload file** (max 5 MB). Any file name works; if there are several, `tune.mp3` wins, otherwise the newest. It stays in private storage and is never in this code repo; the app fetches it with a short-lived link. Without it, the button plays a built-in chiptune.
