@@ -1,20 +1,20 @@
 import { expect, type Page } from "@playwright/test";
 
 export const PASSWORD = "test-password-123";
-export const NOVA = "nova@test.local";
-export const NIGHT = "night@test.local";
-export const STRANGER = "stranger@test.local";
+export const NOVA = "nova";
+export const NIGHT = "night";
+export const STRANGER = "stranger";
 
-export async function login(page: Page, email: string) {
+export async function login(page: Page, username: string) {
   await page.goto("/login");
-  await page.getByLabel("EMAIL").fill(email);
+  await page.getByLabel("USERNAME").fill(username);
   await page.getByLabel("PASSWORD").fill(PASSWORD);
   await page.getByRole("button", { name: /JACK IN/ }).click();
   const failed = page.locator(".form-error");
   await Promise.race([page.waitForURL((u) => u.pathname === "/"), failed.waitFor({ timeout: 30_000 })]);
   if (await failed.isVisible()) {
     const detail = await page.locator(".login-detail").textContent().catch(() => "");
-    throw new Error(`Login failed for ${email}: ${await failed.textContent()} ${detail ?? ""}`);
+    throw new Error(`Login failed for ${username}: ${await failed.textContent()} ${detail ?? ""}`);
   }
 }
 

@@ -9,12 +9,12 @@ test("logged-out visitors only see the login screen @smoke", async ({ page }) =>
 
 test("wrong password is rejected @smoke", async ({ page }) => {
   await page.goto("/login");
-  await page.getByLabel("EMAIL").fill(NOVA);
+  await page.getByLabel("USERNAME").fill(NOVA);
   await page.getByLabel("PASSWORD").fill("not-the-password");
   await page.getByRole("button", { name: /JACK IN/ }).click();
   await page.locator(".form-error").waitFor();
   const detail = await page.locator(".login-detail").textContent({ timeout: 1000 }).catch(() => "");
-  expect(await page.locator(".form-error").textContent(), `login detail: ${detail}`).toMatch(/WRONG EMAIL OR PASSWORD/);
+  expect(await page.locator(".form-error").textContent(), `login detail: ${detail}`).toMatch(/WRONG USERNAME OR PASSWORD/);
 });
 
 test("media API refuses anonymous requests", async ({ request }) => {

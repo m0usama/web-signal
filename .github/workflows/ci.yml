@@ -61,7 +61,7 @@ jobs:
         run: |
           node tests/e2e/seed.mjs
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
-            -c "select public.setup_pair('nova@test.local','Nova','night@test.local','Night');"
+            -c "select public.setup_pair('nova@web-signal.local','Nova','night@web-signal.local','Night');"
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit

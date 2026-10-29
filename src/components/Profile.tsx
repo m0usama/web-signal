@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { synth } from "@/lib/sound";
+import { MIN_PASSWORD } from "@/lib/username";
 import { BADGES } from "@/lib/pixels";
 import type { Badge, Profile as ProfileT, Settings, Theme } from "@/lib/types";
 import { Avatar } from "./Avatar";
@@ -134,13 +135,13 @@ export function ProfilePanel({
           className="field grow"
           type="password"
           autoComplete="new-password"
-          minLength={10}
+          minLength={MIN_PASSWORD}
           value={pw}
           onChange={(e) => setPw(e.target.value)}
-          placeholder="NEW PASSWORD (10+)"
+          placeholder={`NEW PASSWORD (${MIN_PASSWORD}+)`}
           aria-label="New password"
         />
-        <button type="submit" className="btn btn-green" disabled={pw.length < 10}>
+        <button type="submit" className="btn btn-green" disabled={pw.length < MIN_PASSWORD}>
           SAVE
         </button>
       </form>

@@ -8,7 +8,8 @@ if (!url?.includes("127.0.0.1") && !url?.includes("localhost")) {
   process.exit(1);
 }
 const admin = createClient(url, key, { auth: { persistSession: false } });
-for (const email of ["nova@test.local", "night@test.local", "stranger@test.local"]) {
+for (const name of ["nova", "night", "stranger"]) {
+  const email = `${name}@web-signal.local`;
   const { error } = await admin.auth.admin.createUser({ email, password: "test-password-123", email_confirm: true });
   if (error && !/already/i.test(error.message)) throw error;
 }

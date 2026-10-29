@@ -49,14 +49,17 @@ Round portraits, 256×256 PNG with transparent corners. Replace the files to cha
    ```
 5. **Project Settings → API keys:** copy the **Project URL**, the **anon / publishable** key and the **service_role / secret** key.
 
-### 2. Create and pair the two accounts
+### 2. The two accounts (username + password)
 
-1. **Authentication → Users → Add user → Create new user.** Enter the email and a strong password for each person, and tick **Auto Confirm User**. (Or choose **Send invitation** to email a one-time link.)
-2. **SQL Editor**, run once. The first email gets the purple SpiderZiya avatar, the second gets the red Spidey avatar:
-   ```sql
-   select public.setup_pair('ziya@example.com', 'SPIDERZIYA', 'usama@example.com', 'SPIDEY');
-   ```
-3. Share each password privately. Each person can change their password and display name later in **PROFILE**.
+The app logs in with a **username**. Behind the scenes each username maps to an internal address, `<username>@web-signal.local`, which never receives email. There is no sign-up page, and public sign-ups stay switched off in Supabase.
+
+To create them, in **Authentication → Users → Add user → Create new user**, use `spiderziya@web-signal.local` and `spidey@web-signal.local` with passwords of **8+ characters**, and tick **Auto Confirm User**. Then pair them once in the SQL Editor (the first gets the purple avatar, the second the red one):
+
+```sql
+select public.setup_pair('spiderziya@web-signal.local', 'SPIDERZIYA', 'spidey@web-signal.local', 'SPIDEY');
+```
+
+Each person logs in with just `spiderziya` or `spidey` and can change their password in **PROFILE → ACCOUNT** (minimum 8 characters).
 
 ### 3. Vercel
 

@@ -382,8 +382,9 @@ export function SignalApp({ boot }: { boot: Bootstrap }) {
   };
 
   const changePassword = async (pw: string) => {
+    if (pw.length < 8) return "PASSWORD MUST BE AT LEAST 8 CHARACTERS";
     const { error } = await room.supabase.auth.updateUser({ password: pw });
-    return error ? "COULDN'T UPDATE PASSWORD — TRY A LONGER ONE" : null;
+    return error ? "COULDN'T UPDATE PASSWORD — TRY A DIFFERENT ONE" : null;
   };
 
   // ------------------------------------------------------------------ render
