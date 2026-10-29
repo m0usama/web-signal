@@ -68,8 +68,13 @@ jobs:
 
       - name: End-to-end tests
         env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
           CI_SUMMARY: "✘|✓|passed|failed|flaky|did not run|Error:|Expected|Received|login detail|COULDN"
-        run: scripts/ci-run.sh e2e npx playwright test --reporter=list
+        run: scripts/ci-run.sh e2e npx playwright test --reporter=list,json
+
+      - name: Summarise e2e failures
+        if: failure()
+        run: node scripts/e2e-summary.mjs
 
       - name: Cleanup job works against real Storage
         run: |
