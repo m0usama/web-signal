@@ -12,14 +12,7 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await enterApp(night);
   await openTab(night, "COMMS");
   const nightChats = night.getByRole("navigation", { name: "Chats" });
-  await night.waitForTimeout(1500);
-  console.log(
-    "contacts debug:",
-    await night.locator(".contact-chip").count(),
-    JSON.stringify(await night.evaluate(() => document.querySelector(".panel")?.textContent?.slice(0, 200) ?? "no panel")),
-    JSON.stringify(await night.evaluate(() => document.querySelector(".lcd")?.textContent ?? "")),
-  );
-  await expect(nightChats.getByRole("button", { name: /Chat with Nova/ })).toHaveAttribute("aria-current", "true");
+  await expect(nightChats.getByRole("button", { name: /Chat with Nova/i })).toHaveAttribute("aria-current", "true");
 
   // Night opens the bot's chat and gets a cute auto-reply.
   await nightChats.getByRole("button", { name: /Chat with R\.O\.B\.O/ }).click();
@@ -30,8 +23,8 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await expect(night.getByText("beep boop, just a robot here 🤖")).toBeVisible({ timeout: 15_000 });
 
   // Back to Nova: the main chat is untouched by the bot.
-  await nightChats.getByRole("button", { name: /Chat with Nova/ }).click();
-  await expect(night.locator(".contact-chip.on")).toContainText("Nova");
+  await nightChats.getByRole("button", { name: /Chat with Nova/i }).click();
+  await expect(night.locator(".contact-chip.on")).toContainText(/Nova/i);
   await expect(night.getByText("beep boop, just a robot here 🤖")).toHaveCount(0);
 
   // Nova talks to the bot: no auto-reply for Nova.
@@ -49,7 +42,7 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await enterApp(robo);
   await openTab(robo, "COMMS");
   const roboChats = robo.getByRole("navigation", { name: "Chats" });
-  await roboChats.getByRole("button", { name: /Chat with Nova/ }).click();
+  await roboChats.getByRole("button", { name: /Chat with Nova/i }).click();
   await expect(robo.getByText("testing 1 2 3")).toBeVisible({ timeout: 15_000 });
   await robo.getByLabel("Message", { exact: true }).fill("all systems go");
   await robo.getByRole("button", { name: "SEND", exact: true }).click();
@@ -58,8 +51,8 @@ test("v3: pick who to chat with, the test bot auto-replies to one person only", 
   await expect(nova.getByText("beep boop, just a robot here 🤖")).toHaveCount(0);
 
   // A signal in a chat that isn't open shows a banner + badge; tapping it opens that chat.
-  await nova.getByRole("navigation", { name: "Chats" }).getByRole("button", { name: /Chat with Night/ }).click();
-  await expect(nova.locator(".contact-chip.on")).toContainText("Night");
+  await nova.getByRole("navigation", { name: "Chats" }).getByRole("button", { name: /Chat with Night/i }).click();
+  await expect(nova.locator(".contact-chip.on")).toContainText(/Night/i);
   await expect(nova.getByText("LINK OK")).toBeVisible({ timeout: 20_000 });
   await robo.getByLabel("Message", { exact: true }).fill("ping from the bot");
   await robo.getByRole("button", { name: "SEND", exact: true }).click();
