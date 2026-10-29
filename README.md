@@ -19,6 +19,12 @@ A private pixel-art communicator for exactly two people. A fictional night city 
 | **Signal drops** | Leave a note, sticker, photo or GIF on a rooftop. The other person sees a glowing marker and opens it in a comic-book reveal. |
 | **Pokes** | Heart, finger heart, hug, zap, star, tingle, web shot — they fly across the map. Hearts sent within 10 seconds of each other trigger **Heart Sync**. |
 | **Our tune** | Press **♪ TUNE** (map or Signals). It plays once on the other phone, live; your button shows a pixel equaliser while it's playing there and stops when it ends. If their sound is off they get a note instead. |
+| **Walkie-talkie voice notes** | Hold **📻 TALK**, release to send, slide away to cancel. Plays back through a radio effect (squelch, hiss, roger-beep). Works in keep, 24H and ghost (plays once) modes. |
+| **Notifications** | Turn on in **ME → NOTIFICATIONS**. Pokes, signals, drops, sparks and game moves reach a locked phone. On iPhone this needs the home-screen app (iOS 16.4+). Lock-screen text never shows message contents. |
+| **Moods + countdown** | Pick a status (sleepy, missing you, at work…) shown above your avatar; set the next meet-up and it counts down on the header display. |
+| **Daily spark + streak** | One question a day; the other person's answer unlocks only after you answer (enforced by the database). 🔥 counts days in a row you both answered. |
+| **PLAY** | Rooftop tic-tac-toe (moves checked by the database) and a live doodle pad you draw on together — send the drawing to the chat. |
+| **Day / night** | Follows each phone's clock: night 7 pm–7 am, with a sunrise/sunset glow in the hour around the switch (Theme: AUTO). |
 | **Sound** | Original chiptune alerts made in code (Web Audio). Different sounds for messages, pokes, drops and ghosts. When sound is off the screen flashes instead. |
 | **Secrets** | Tap the logo three times. Tap rooftops and water towers. Read the bottom-left corner of the river. |
 | **Badges** | Awarded by the database (first signal, heart sync, night owl, finder…). |
@@ -72,9 +78,23 @@ Each person logs in with just `spiderziya` or `spidey` and can change their pass
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon / publishable key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key (**server only, never public**) |
    | `CRON_SECRET` | any long random string |
+   | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | push keys (`npx web-push generate-vapid-keys`) |
+   | `VAPID_SUBJECT` | your site URL |
+   | `PUSH_WEBHOOK_SECRET` | long random string, also saved in the database (below) |
 
 3. **Deploy.** Every push to `main` redeploys automatically.
 4. Back in Supabase: **Authentication → URL Configuration** → set **Site URL** to your Vercel URL (needed for invitation and password-reset links).
+
+### Push notifications (database side)
+
+Run once in the SQL editor so the database can ask the app to send notifications:
+
+```sql
+insert into private.config (key, value) values
+  ('push_url', 'https://YOUR-SITE.vercel.app/api/push'),
+  ('push_secret', 'THE SAME PUSH_WEBHOOK_SECRET AS IN VERCEL')
+on conflict (key) do update set value = excluded.value;
+```
 
 ### 4. Your tune (optional)
 
@@ -118,7 +138,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs all of the above on every push 
 
 ## Known limitations
 
+- Notifications rely on the browser's push service; they're tested up to the point of sending, but delivery to a locked phone can only be checked on real devices.
 - The tune only plays if the other person has the app open with sound enabled (browsers block sound until you tap once per visit).
-- Alerts play while the app is open (including in a background tab on desktop). Push notifications to a locked phone are not built yet; they need a service worker and iOS 16.4+ home-screen install.
 - Vercel's free plan runs the Storage cleanup once a day; expired files are unreachable immediately but take up to a day to be physically deleted.
 - Supabase's free plan pauses projects after a week with no activity; opening the app regularly keeps it awake.
