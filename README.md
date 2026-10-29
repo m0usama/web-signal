@@ -78,7 +78,7 @@ Each person logs in with just `spiderziya` or `spidey` and can change their pass
 
 ### 4. Your tune (optional)
 
-**Storage → signal-tunes → Upload file**, and name it exactly `tune.mp3` (max 5 MB). It stays in private storage and is never in this code repo; the app fetches it with a short-lived link. Without it, the button plays a built-in chiptune.
+**Storage → signal-tunes → Upload file** (max 5 MB). Any file name works; if there are several, `tune.mp3` wins, otherwise the newest. It stays in private storage and is never in this code repo; the app fetches it with a short-lived link. Without it, the button plays a built-in chiptune.
 
 ### 5. On the phones
 
