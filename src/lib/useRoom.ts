@@ -196,27 +196,51 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     };
   }, [supabase, roomId, generation, loadAll, boot.me.id]);
 
-  // ------------------------------------------------------------ presence + typing (private channel)
+  // ------------------------------------------------------------ presence + typing + live events (private channel)
+  // Self-healing: reconnects on its own with back-off, clears any stale
+  // channel with the same topic first, and re-announces itself every 30s.
+  const [presenceGen, setPresenceGen] = useState(0);
+  const presenceRetries = useRef(0);
+
   useEffect(() => {
     let disposed = false;
     let channel: RealtimeChannel | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    const topic = `room:${roomId}`;
+
+    const reconnect = () => {
+      if (disposed) return;
+      disposed = true; // this instance is finished; a fresh one takes over
+      const delay = Math.min(20_000, 1000 * 2 ** presenceRetries.current++);
+      setTimeout(() => setPresenceGen((g) => g + 1), delay);
+    };
 
     (async () => {
+      // supabase-js reuses a channel object with the same topic; remove any
+      // leftover so a reconnect never inherits a dead or closing channel.
+      for (const old of supabase.getChannels()) {
+        if (old.topic === `realtime:${topic}`) await supabase.removeChannel(old);
+      }
       await supabase.realtime.setAuth();
       if (disposed) return;
-      channel = supabase.channel(`room:${roomId}`, {
+      const ch = supabase.channel(topic, {
         config: { private: true, presence: { key: boot.me.id } },
       });
-      presenceChannel.current = channel;
-      channel
-        .on("presence", { event: "sync" }, () => {
-          const state = channel!.presenceState<{ view: Tab }>();
-          const theirs = state[boot.partner.id]?.[0];
-          setPresence((p) => {
-            if (!p.online && theirs) queueMicrotask(() => eventsRef.current.onPartnerArrive?.());
-            return { online: !!theirs, view: theirs?.view ?? null, typing: theirs ? p.typing : false };
-          });
-        })
+      channel = ch;
+      presenceChannel.current = ch;
+
+      const readPresence = () => {
+        const state = ch.presenceState<{ view: Tab }>();
+        const theirs = state[boot.partner.id]?.[0];
+        setPresence((p) => {
+          if (!p.online && theirs) queueMicrotask(() => eventsRef.current.onPartnerArrive?.());
+          return { online: !!theirs, view: theirs?.view ?? null, typing: theirs ? p.typing : false };
+        });
+      };
+
+      ch.on("presence", { event: "sync" }, readPresence)
+        .on("presence", { event: "join" }, readPresence)
+        .on("presence", { event: "leave" }, readPresence)
         .on("broadcast", { event: "typing" }, ({ payload }) => {
           if (payload?.user !== boot.partner.id) return;
           setPresence((p) => ({ ...p, typing: !!payload.typing }));
@@ -232,19 +256,40 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTuneAck?.(payload);
         })
         .subscribe(async (status) => {
-          if (status === "SUBSCRIBED" && !disposed) {
-            await channel!.track({ view: tabRef.current, at: Date.now() });
+          if (disposed) return;
+          if (status === "SUBSCRIBED") {
+            presenceRetries.current = 0;
+            await ch.track({ view: tabRef.current, at: Date.now() });
+            if (heartbeat) clearInterval(heartbeat);
+            heartbeat = setInterval(() => {
+              if (!disposed && document.visibilityState === "visible") void ch.track({ view: tabRef.current, at: Date.now() });
+            }, 30_000);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setPresence((p) => ({ ...p, online: false, typing: false }));
+            reconnect();
           }
         });
     })();
 
     return () => {
       disposed = true;
-      presenceChannel.current = null;
+      if (heartbeat) clearInterval(heartbeat);
       if (typingTimer.current) clearTimeout(typingTimer.current);
-      if (channel) void supabase.removeChannel(channel);
+      if (channel) {
+        if (presenceChannel.current === channel) presenceChannel.current = null;
+        void supabase.removeChannel(channel);
+      }
     };
-  }, [supabase, roomId, boot.me.id, boot.partner.id, generation]);
+  }, [supabase, roomId, boot.me.id, boot.partner.id, presenceGen]);
+
+  // Coming back online or to a visible tab: make sure the live link is fresh.
+  useEffect(() => {
+    const kick = () => {
+      if (navigator.onLine) setPresenceGen((g) => g + 1);
+    };
+    window.addEventListener("online", kick);
+    return () => window.removeEventListener("online", kick);
+  }, []);
 
   // Tell the partner which screen we are on.
   useEffect(() => {
