@@ -13,6 +13,8 @@ import { DropComposer, type DropDraft } from "./DropComposer";
 import { Header } from "./Header";
 import { Icon } from "./Icon";
 import { Intro } from "./Intro";
+import { IdleSpider } from "./IdleSpider";
+import { normaliseLook } from "@/lib/spider";
 import { ProfilePanel } from "./Profile";
 import { Reveal, type RevealTarget } from "./Reveal";
 import { Secret } from "./Secret";
@@ -414,6 +416,7 @@ export function SignalApp({
         return { tone: "idle", text: "" };
     }
   };
+  const myLook = normaliseLook(room.me.spider, room.me.avatar_key);
   const landmarks = boot.chatOnly ? [] : LANDMARKS.map((lm) => ({ lm, status: status(lm.key) }));
   const questTurns = landmarks.filter((l) => l.status.tone === "turn" || l.status.tone === "new").length;
 
@@ -868,6 +871,14 @@ export function SignalApp({
                   }
                 }}
                 onChangePassword={changePassword}
+                onSaveSpider={async (look) => {
+                  try {
+                    await room.actions.saveSpider({ ...look });
+                    toast({ text: "SPIDER SAVED 🕷", icon: "sparkle", tone: "love" });
+                  } catch (e) {
+                    toast({ text: friendlyError(e), tone: "warn" });
+                  }
+                }}
                 supabase={room.supabase}
               />
             )}
@@ -1050,7 +1061,8 @@ export function SignalApp({
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
-      {!introDone && <Intro onDone={finishIntro} reduced={reduced} />}
+      <IdleSpider look={myLook} reduced={reduced} paused={!introDone || !!quest || !!reveal || mapMode !== "browse" || tunePicker} />
+      {!introDone && <Intro onDone={finishIntro} reduced={reduced} look={myLook} name={room.me.display_name} />}
     </div>
   );
 }

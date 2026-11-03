@@ -110,7 +110,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       supabase.from("signal_drops").select("*").eq("room_id", roomId).order("created_at", { ascending: true }),
       supabase
         .from("profiles")
-        .select("id,display_name,avatar_key,map_x,map_y,last_seen_at,foreground,mood,mood_at")
+        .select("id,display_name,avatar_key,map_x,map_y,last_seen_at,foreground,mood,mood_at,spider")
         .in("id", [boot.me.id, boot.partner.id]),
       supabase.from("room_members").select("room_id,user_id,last_read_at").eq("room_id", roomId),
       supabase.from("badges").select("*"),
@@ -711,6 +711,15 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     [supabase, me, boot.me.id],
   );
 
+  const saveSpider = useCallback(
+    async (spider: Record<string, string>) => {
+      setMe((p) => ({ ...p, spider }));
+      const { error } = await supabase.from("profiles").update({ spider }).eq("id", boot.me.id);
+      if (error) throw error;
+    },
+    [supabase, boot.me.id],
+  );
+
   const rename = useCallback(
     async (name: string) => {
       const display_name = name.trim().toUpperCase().slice(0, 24);
@@ -865,6 +874,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       deleteDrop,
       moveMe,
       rename,
+      saveSpider,
       markRead,
       setTyping,
       broadcast,
@@ -877,7 +887,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       requestMedia,
       reload: loadAll,
     }),
-    [sendText, sendSticker, sendMedia, sendVoice, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, markRead, setTyping, broadcast, setMood, saveCountdown, answerSpark, newGame, gameMove, saveSettings, requestMedia, loadAll],
+    [sendText, sendSticker, sendMedia, sendVoice, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, saveSpider, markRead, setTyping, broadcast, setMood, saveCountdown, answerSpark, newGame, gameMove, saveSettings, requestMedia, loadAll],
   );
 
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);

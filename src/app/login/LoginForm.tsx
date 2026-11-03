@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LOGO } from "@/lib/pixels";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import { PixelArt } from "@/components/PixelArt";
+import { SpiderSprite } from "@/components/SpiderSprite";
+import { DEFAULT_LOOKS } from "@/lib/spider";
 import { normaliseUsername, USERNAME_PATTERN, usernameToEmail } from "@/lib/username";
 
 export function LoginForm() {
@@ -47,7 +47,10 @@ export function LoginForm() {
           router.refresh();
         }}
       >
-        <PixelArt sprite={LOGO} size={84} />
+        <span className="login-spider" aria-hidden>
+          <span className="login-thread" />
+          <SpiderSprite look={DEFAULT_LOOKS.b} size={84} />
+        </span>
         <h1 className="login-title">WEB//SIGNAL</h1>
         <p className="lcd small">PRIVATE FREQUENCY · TWO HEROES ONLY</p>
         <label className="field-label">

@@ -5,7 +5,7 @@ import type { Bootstrap, Contact, Profile, RoomMember, Settings } from "@/lib/ty
 
 export const dynamic = "force-dynamic";
 
-const PROFILE_FIELDS = "id,display_name,avatar_key,map_x,map_y,last_seen_at,foreground,mood,mood_at";
+const PROFILE_FIELDS = "id,display_name,avatar_key,map_x,map_y,last_seen_at,foreground,mood,mood_at,spider";
 
 export default async function Home() {
   const supabase = await getServerSupabase();

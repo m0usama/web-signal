@@ -9,6 +9,8 @@ import { BADGES } from "@/lib/pixels";
 import type { Badge, Profile as ProfileT, Settings, Theme } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
+import { SpiderBuilder } from "./SpiderBuilder";
+import type { SpiderLook } from "@/lib/spider";
 
 export function ProfilePanel({
   me,
@@ -19,8 +21,10 @@ export function ProfilePanel({
   onSave,
   onRename,
   onChangePassword,
+  onSaveSpider,
   supabase,
 }: {
+  onSaveSpider: (look: SpiderLook) => Promise<void>;
   supabase: SupabaseClient;
   me: ProfileT;
   settings: Settings;
@@ -54,6 +58,9 @@ export function ProfilePanel({
           <p className="muted">AVATAR {me.avatar_key.toUpperCase()} · {mine.length} BADGES</p>
         </div>
       </div>
+
+      <h2 className="panel-title">🕷 MY SPIDER</h2>
+      <SpiderBuilder initial={me.spider} avatarKey={me.avatar_key} onSave={onSaveSpider} />
 
       <form
         className="row-between gap"
