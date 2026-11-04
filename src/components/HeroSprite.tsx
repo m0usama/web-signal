@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useId, useState, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { COLORS, glowOn, H, HAIR_COLORS, HEAD_BOX, hexOf, shade, SKINS, W, type HeroLook } from "@/lib/hero";
 
 const INK = "#10101E";
@@ -8,7 +8,37 @@ const WHITE = "#FFFFFF";
 const PINK = "#FF5C8A";
 const YELLOW = "#FFD84D";
 const SILVER = "#D6D9E8";
-const SW = 2.6; // outline width
+const SW = 3.2; // outline width (drawn at half size, so ~1.6 grid pixels)
+/** Grid pixels per art unit: 120×160 art → 60×80 pixel grid. */
+const PX = 0.5;
+const CACHE = new Map<string, string>();
+
+/** Draw the SVG onto a tiny canvas, snap alpha to on/off, return a PNG URL. */
+function pixelate(markup: string, w: number, h: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext("2d");
+        if (!ctx) return resolve(null);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(image, 0, 0, w, h);
+        const d = ctx.getImageData(0, 0, w, h);
+        const a = d.data;
+        for (let i = 3; i < a.length; i += 4) a[i] = a[i] > 110 ? 255 : 0;
+        ctx.putImageData(d, 0, 0);
+        resolve(c.toDataURL());
+      } catch {
+        resolve(null);
+      }
+    };
+    image.onerror = () => resolve(null);
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+  });
+}
 
 const EYE_Y = 58;
 const EYE_L = 43;
@@ -60,18 +90,46 @@ export const HeroSprite = memo(function HeroSprite({
   }, [still]);
 
   const [hx, hy, hs] = HEAD_BOX;
+  const viewBox = head ? `${hx} ${hy} ${hs} ${hs}` : `0 0 ${W} ${H}`;
+  // Pixel grid: the detailed art is drawn small with hard edges, then scaled
+  // up without smoothing, so it reads as pixel art with lots of detail.
+  const gw = head ? Math.round(hs * PX) : Math.round(W * PX);
+  const gh = head ? Math.round(hs * PX) : Math.round(H * PX);
+  const width = head ? size : Math.round((size * W) / H);
+  const src = useRef<SVGSVGElement>(null);
+  const [img, setImg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const el = src.current;
+    if (!el) return;
+    const markup = el.outerHTML;
+    const hit = CACHE.get(markup);
+    if (hit) {
+      const t = setTimeout(() => setImg(hit), 0);
+      return () => clearTimeout(t);
+    }
+    let alive = true;
+    pixelate(markup, gw, gh).then(
+      (url) => {
+        if (!url) return;
+        if (CACHE.size > 400) CACHE.clear();
+        CACHE.set(markup, url);
+        if (alive) setImg(url);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [look, blink, head, gw, gh]);
+
   return (
-    <svg
-      className={className}
-      width={head ? size : Math.round((size * W) / H)}
-      height={size}
-      viewBox={head ? `${hx} ${hy} ${hs} ${hs}` : `0 0 ${W} ${H}`}
-      role={title ? "img" : undefined}
-      aria-label={title}
-      aria-hidden={title ? undefined : true}
-    >
-      <HeroArt look={look} blink={blink} uid={uid} />
-    </svg>
+    <span className={`hero-px ${className ?? ""}`} style={{ width, height: size }} role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
+      <svg ref={src} xmlns="http://www.w3.org/2000/svg" width={gw} height={gh} viewBox={viewBox} shapeRendering="crispEdges" className={img ? "hero-px-src" : "hero-px-fallback"}>
+        <HeroArt look={look} blink={blink} uid={uid} />
+      </svg>
+      {img && <img src={img} alt="" width={width} height={size} draggable={false} />}
+    </span>
   );
 });
 

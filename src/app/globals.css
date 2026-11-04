@@ -4072,7 +4072,7 @@ input[type="datetime-local"].field {
   box-shadow: 0 0 6px rgba(248, 245, 255, 0.6);
 }
 
-.intro-dangle svg {
+.intro-dangle .hero-px {
   margin-top: -6px;
   filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.35));
   animation: dangle-sway 2.6s ease-in-out 1.6s infinite;
@@ -4153,7 +4153,7 @@ input[type="datetime-local"].field {
     animation: none;
     transform: translateX(-50%);
   }
-  .intro-dangle svg {
+  .intro-dangle .hero-px {
     animation: none;
   }
 }
@@ -4435,7 +4435,7 @@ input[type="datetime-local"].field {
   background: #f8f5ff;
 }
 
-.login-spider svg {
+.login-spider .hero-px {
   margin-top: -4px;
   animation: dangle-sway 2.6s ease-in-out 1.2s infinite;
   transform-origin: 50% -28px;
@@ -4449,7 +4449,7 @@ input[type="datetime-local"].field {
 
 @media (prefers-reduced-motion: reduce) {
   .login-spider,
-  .login-spider svg {
+  .login-spider .hero-px {
     animation: none;
   }
 }
@@ -4462,7 +4462,7 @@ input[type="datetime-local"].field {
   box-shadow: 0 0 0 var(--px) var(--ink);
 }
 
-.avatar-art.is-hero svg {
+.avatar-art.is-hero .hero-px {
   width: 100%;
   height: 100%;
 }
@@ -4569,4 +4569,31 @@ input[type="datetime-local"].field {
 .idle-setting .seg button {
   padding: 8px 2px;
   font-size: 10px;
+}
+
+/* pixel hero: hidden source SVG + the pixelated image on top */
+.hero-px {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.hero-px img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.hero-px-src {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hero-px-fallback {
+  width: 100%;
+  height: 100%;
 }
