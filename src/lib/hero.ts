@@ -173,9 +173,9 @@ export function randomHero(): HeroLook {
 
 // ------------------------------------------------------------------ drawing
 
-/** Art is drawn on a 120 × 160 canvas; round avatars crop to the head. */
+/** Art is drawn on a 120 × 140 canvas (a chubby, big-headed hero); round avatars crop to the head. */
 export const W = 120;
-export const H = 160;
+export const H = 140;
 /** The square around the head, for round avatars: [x, y, size]. */
 export const HEAD_BOX: [number, number, number] = [6, -2, 108];
 

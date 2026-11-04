@@ -4072,11 +4072,15 @@ input[type="datetime-local"].field {
   box-shadow: 0 0 6px rgba(248, 245, 255, 0.6);
 }
 
-.intro-dangle .hero-px {
+.intro-dangle .hero-hang {
   margin-top: -6px;
-  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 -6px 0 rgba(0, 0, 0, 0.35));
+}
+
+/* the whole line + hero sways from the top, like hanging from a web */
+.intro-thread-wrap {
   animation: dangle-sway 2.6s ease-in-out 1.6s infinite;
-  transform-origin: 50% -34vh;
+  transform-origin: 0 0;
 }
 
 .intro-hello {
@@ -4153,7 +4157,7 @@ input[type="datetime-local"].field {
     animation: none;
     transform: translateX(-50%);
   }
-  .intro-dangle .hero-px {
+  .intro-thread-wrap {
     animation: none;
   }
 }

@@ -111,7 +111,7 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
         <span className="idle-thread" />
         <div className="idle-body">
           <span className="hero-hang">
-            <HeroSprite look={look} size={120} />
+            <HeroSprite look={look} size={120} pose="hang" />
           </span>
           {trick === "hearts" && phase === "show" && (
             <span className="idle-hearts">

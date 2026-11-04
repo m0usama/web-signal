@@ -9,7 +9,7 @@ const PINK = "#FF5C8A";
 const YELLOW = "#FFD84D";
 const SILVER = "#D6D9E8";
 const SW = 3.2; // outline width (drawn at half size, so ~1.6 grid pixels)
-/** Grid pixels per art unit: 120×160 art → 60×80 pixel grid. */
+/** Grid pixels per art unit: 120×140 art → 60×70 pixel grid. */
 const PX = 0.5;
 const CACHE = new Map<string, string>();
 
@@ -60,6 +60,7 @@ export const HeroSprite = memo(function HeroSprite({
   look,
   size = 96,
   head = false,
+  pose = "stand",
   still = false,
   title,
   className,
@@ -67,6 +68,8 @@ export const HeroSprite = memo(function HeroSprite({
   look: HeroLook;
   size?: number;
   head?: boolean;
+  /** "hang" raises the arms, for hanging upside-down from a web line. */
+  pose?: "stand" | "hang";
   still?: boolean;
   title?: string;
   className?: string;
@@ -121,19 +124,19 @@ export const HeroSprite = memo(function HeroSprite({
     return () => {
       alive = false;
     };
-  }, [look, blink, head, gw, gh]);
+  }, [look, blink, head, pose, gw, gh]);
 
   return (
     <span className={`hero-px ${className ?? ""}`} style={{ width, height: size }} role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
       <svg ref={src} xmlns="http://www.w3.org/2000/svg" width={gw} height={gh} viewBox={viewBox} shapeRendering="crispEdges" className={img ? "hero-px-src" : "hero-px-fallback"}>
-        <HeroArt look={look} blink={blink} uid={uid} />
+        <HeroArt look={look} blink={blink} uid={uid} pose={pose} />
       </svg>
       {img && <img src={img} alt="" width={width} height={size} draggable={false} />}
     </span>
   );
 });
 
-function HeroArt({ look, blink, uid }: { look: HeroLook; blink: boolean; uid: string }) {
+function HeroArt({ look, blink, uid, pose }: { look: HeroLook; blink: boolean; uid: string; pose: "stand" | "hang" }) {
   const skin = hexOf(SKINS, look.skin);
   const skinDark = shade(skin, 0.84);
   const hair = hexOf(HAIR_COLORS, look.hairColor);
@@ -150,11 +153,10 @@ function HeroArt({ look, blink, uid }: { look: HeroLook; blink: boolean; uid: st
   const o = { stroke: INK, strokeWidth: SW, strokeLinejoin: "round" as const, strokeLinecap: "round" as const };
 
   const back: ReactNode[] = [];
-  const front: ReactNode[] = [];
 
   // ---------------------------------------------------------------- behind
-  if (look.outfit === "cape") back.push(<path key="cape" d="M38,86 C22,110 16,134 14,152 Q60,142 106,152 C104,134 98,110 82,86 Z" fill={trimDark} {...o} />);
-  if (look.outfit === "coat") back.push(<path key="coat" d="M36,96 L30,146 L56,146 L58,118 L62,118 L64,146 L90,146 L84,96 Z" fill={trimDark} {...o} />);
+  if (look.outfit === "cape") back.push(<path key="cape" d="M34,88 C20,104 14,122 12,136 Q60,128 108,136 C106,122 100,104 86,88 Z" fill={trimDark} {...o} />);
+  if (look.outfit === "coat") back.push(<path key="coat" d="M32,98 L26,132 L56,132 L58,116 L62,116 L64,132 L94,132 L88,98 Z" fill={trimDark} {...o} />);
   if (!fullMask) {
     if (look.hair === "long")
       back.push(<path key="hl" d="M18,54 C14,90 18,112 26,120 L94,120 C102,112 106,90 102,54 C100,30 84,14 60,14 C36,14 20,30 18,54 Z" fill={hairDark} {...o} />);
@@ -175,39 +177,50 @@ function HeroArt({ look, blink, uid }: { look: HeroLook; blink: boolean; uid: st
     if (look.hair === "hood") back.push(<ellipse key="hh" cx={60} cy={54} rx={47} ry={45} fill={suit} {...o} />);
   }
 
-  // ---------------------------------------------------------------- body
+  // ---------------------------------------------------------------- chubby body
+  // Arms hang down when standing; when hanging upside-down they dangle
+  // "up" in the sprite (towards the ground once the sprite is flipped).
+  const hang = pose === "hang";
+  const arm = (side: "l" | "r") => {
+    const sx = side === "l" ? 26 : 94;
+    const fill = look.pattern === "split" && side === "r" ? trim : suit;
+    const turn = hang ? (side === "l" ? 155 : -155) : side === "l" ? 12 : -12;
+    return (
+      <g key={`arm${side}`} transform={`rotate(${turn} ${sx} 92)`}>
+        <rect x={sx - 7} y={88} width={14} height={22} rx={7} fill={fill} {...o} />
+        <circle cx={sx} cy={113} r={7.5} fill={handFill} {...o} />
+      </g>
+    );
+  };
   const body = (
     <g key="body">
-      {/* legs + boots */}
-      <rect x={41} y={116} width={16} height={28} rx={6} fill={trim} {...o} />
-      <rect x={63} y={116} width={16} height={28} rx={6} fill={trim} {...o} />
-      <path d="M37,140 h22 v8 q0,5 -5,5 h-14 q-5,0 -5,-5 z" fill={trimDark} {...o} />
-      <path d="M61,140 h22 v8 q0,5 -5,5 h-14 q-5,0 -5,-5 z" fill={trimDark} {...o} />
-      <path d="M40,143 h16" stroke={shade(trim, 1.15)} strokeWidth={2} strokeLinecap="round" />
-      <path d="M64,143 h16" stroke={shade(trim, 1.15)} strokeWidth={2} strokeLinecap="round" />
-      {/* arms */}
-      <rect x={22} y={88} width={15} height={32} rx={7.5} fill={look.pattern === "split" ? suit : suit} {...o} />
-      <rect x={83} y={88} width={15} height={32} rx={7.5} fill={look.pattern === "split" ? trim : suit} {...o} />
-      <circle cx={29.5} cy={122} r={7.5} fill={handFill} {...o} />
-      <circle cx={90.5} cy={122} r={7.5} fill={handFill} {...o} />
-      {/* torso */}
+      {/* stubby legs + boots */}
+      <rect x={40} y={108} width={17} height={18} rx={6} fill={trim} {...o} />
+      <rect x={63} y={108} width={17} height={18} rx={6} fill={trim} {...o} />
+      <path d="M36,122 h23 v7 q0,5 -5,5 h-13 q-5,0 -5,-5 z" fill={trimDark} {...o} />
+      <path d="M61,122 h23 v7 q0,5 -5,5 h-13 q-5,0 -5,-5 z" fill={trimDark} {...o} />
+      <path d="M39,125 h16 M65,125 h16" stroke={shade(trim, 1.2)} strokeWidth={2} strokeLinecap="round" />
+      {!hang && arm("l")}
+      {!hang && arm("r")}
+      {/* round belly */}
       <clipPath id={id("t")}>
-        <rect x={35} y={84} width={50} height={38} rx={12} />
+        <rect x={30} y={82} width={60} height={36} rx={18} />
       </clipPath>
-      <rect x={35} y={84} width={50} height={38} rx={12} fill={suit} />
+      <rect x={30} y={82} width={60} height={36} rx={18} fill={suit} />
       <g clipPath={`url(#${id("t")})`}>
-        {look.pattern === "split" && <rect x={60} y={80} width={30} height={46} fill={trim} />}
-        {look.pattern === "stripes" && [90, 100, 110].map((y) => <rect key={y} x={30} y={y} width={60} height={5} fill={trim} />)}
-        {look.pattern === "chevron" && <path d="M30,88 L60,106 L90,88 L90,98 L60,116 L30,98 Z" fill={trim} />}
-        <rect x={72} y={80} width={20} height={46} fill={suitDark} opacity={0.35} />
+        {look.pattern === "split" && <rect x={60} y={78} width={34} height={44} fill={trim} />}
+        {look.pattern === "stripes" && [90, 100].map((y) => <rect key={y} x={26} y={y} width={68} height={5} fill={trim} />)}
+        {look.pattern === "chevron" && <path d="M26,86 L60,104 L94,86 L94,96 L60,114 L26,96 Z" fill={trim} />}
+        <ellipse cx={86} cy={104} rx={16} ry={22} fill={suitDark} opacity={0.4} />
+        <ellipse cx={42} cy={92} rx={7} ry={4} fill={WHITE} opacity={0.25} />
       </g>
       {EMBLEMS[look.pattern] && (
-        <path d={EMBLEMS[look.pattern]} transform="translate(60,100)" fill={look.trim === look.suit ? WHITE : trim} stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
+        <path d={EMBLEMS[look.pattern]} transform="translate(60,98) scale(0.9)" fill={look.trim === look.suit ? WHITE : trim} stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
       )}
-      <rect x={35} y={84} width={50} height={38} rx={12} fill="none" {...o} />
+      <rect x={30} y={82} width={60} height={36} rx={18} fill="none" {...o} />
       {/* belt */}
-      <rect x={36} y={113} width={48} height={7} rx={2} fill={trimDark} {...o} />
-      <rect x={55} y={112} width={10} height={9} rx={2} fill={YELLOW} {...o} />
+      <path d="M33,108 Q60,114 87,108 L86,114 Q60,120 34,114 Z" fill={trimDark} {...o} />
+      <rect x={55} y={108} width={10} height={9} rx={2} fill={YELLOW} {...o} />
     </g>
   );
 
@@ -217,37 +230,51 @@ function HeroArt({ look, blink, uid }: { look: HeroLook; blink: boolean; uid: st
     const j = look.outfit === "coat" ? trimDark : shade(trim, 0.9);
     gear.push(
       <g key="jk">
-        <path d="M35,96 Q35,84 47,84 L52,84 L50,121 L35,121 Z" fill={j} {...o} />
-        <path d="M85,96 Q85,84 73,84 L68,84 L70,121 L85,121 Z" fill={j} {...o} />
-        <rect x={22} y={88} width={15} height={26} rx={7.5} fill={j} {...o} />
-        <rect x={83} y={88} width={15} height={26} rx={7.5} fill={j} {...o} />
-        <path d="M47,84 L56,100 M73,84 L64,100" stroke={INK} strokeWidth={2} />
+        <path d="M30,100 Q30,82 46,82 L51,82 L49,117 L36,117 Q30,112 30,100 Z" fill={j} {...o} />
+        <path d="M90,100 Q90,82 74,82 L69,82 L71,117 L84,117 Q90,112 90,100 Z" fill={j} {...o} />
+        <path d="M46,82 L55,98 M74,82 L65,98" stroke={INK} strokeWidth={2} />
       </g>,
     );
   }
   if (look.outfit === "scarf")
     gear.push(
       <g key="sc">
-        <rect x={36} y={80} width={48} height={11} rx={5.5} fill={trim} {...o} />
-        <path d="M66,88 L70,112 L80,110 L74,88 Z" fill={trimDark} {...o} />
+        <rect x={32} y={78} width={56} height={11} rx={5.5} fill={trim} {...o} />
+        <path d="M68,86 L72,106 L82,104 L76,86 Z" fill={trimDark} {...o} />
       </g>,
     );
   if (look.outfit === "tie")
     gear.push(
       <g key="tie">
-        <path d="M56,85 L64,85 L62,91 L58,91 Z" fill={trim} {...o} />
-        <path d="M58,91 L62,91 L66,110 L60,116 L54,110 Z" fill={trimDark} {...o} />
+        <path d="M56,83 L64,83 L62,89 L58,89 Z" fill={trim} {...o} />
+        <path d="M58,89 L62,89 L66,104 L60,110 L54,104 Z" fill={trimDark} {...o} />
       </g>,
     );
   if (look.outfit === "spikes")
     gear.push(
       <g key="sp" fill={SILVER} {...o}>
-        <path d="M18,94 L24,78 L30,90 Z" />
-        <path d="M28,90 L34,74 L40,88 Z" />
-        <path d="M102,94 L96,78 L90,90 Z" />
-        <path d="M92,90 L86,74 L80,88 Z" />
+        <path d="M16,94 L22,78 L28,90 Z" />
+        <path d="M26,90 L32,74 L38,88 Z" />
+        <path d="M104,94 L98,78 L92,90 Z" />
+        <path d="M94,90 L88,74 L82,88 Z" />
       </g>,
     );
+  // arms drawn over outfit (sleeves match a jacket/coat)
+  const sleeves = look.outfit === "jacket" || look.outfit === "coat";
+  const arms = hang ? (
+    <g key="arms-hang">
+      {arm("l")}
+      {arm("r")}
+    </g>
+  ) : sleeves ? (
+    <g key="sleeves">
+      {[26, 94].map((sx) => (
+        <g key={sx} transform={`rotate(${sx < 60 ? 12 : -12} ${sx} 92)`}>
+          <rect x={sx - 7} y={88} width={14} height={16} rx={7} fill={look.outfit === "coat" ? trimDark : shade(trim, 0.9)} {...o} />
+        </g>
+      ))}
+    </g>
+  ) : null;
 
   // ---------------------------------------------------------------- head
   const headShape = <ellipse cx={60} cy={52} rx={40} ry={37} />;
@@ -563,9 +590,11 @@ function HeroArt({ look, blink, uid }: { look: HeroLook; blink: boolean; uid: st
       {back}
       {body}
       {gear}
+      {!hang && arms}
       {headParts}
       {face}
       {hat}
+      {hang && arms}
     </g>
   );
 }

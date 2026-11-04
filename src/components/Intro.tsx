@@ -55,7 +55,9 @@ export function Intro({ onDone, reduced, look, name }: { onDone: () => void; red
       <div className="intro-thread-wrap">
         <div className="intro-dangle">
           <span className="intro-thread" aria-hidden />
-          <HeroSprite look={look} size={150} />
+          <span className="hero-hang">
+            <HeroSprite look={look} size={150} pose="hang" />
+          </span>
           {stage !== "drop" && <span className="intro-hello">HEY {name}!</span>}
         </div>
       </div>
