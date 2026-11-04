@@ -99,17 +99,39 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
   const rig = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLSpanElement>(null);
-  const base = useRef(260);
+  const [base, setBase] = useState(260);
+  const baseRef = useRef(260);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  const play = (name: string) => {
+    const s = STUNTS[name];
+    const b = baseRef.current;
+    blendThen(rig.current, "rotate(0deg)", () => {
+      rig.current?.animate(keyframes(SWING_RIG.has(name) ? s.frames : SWAY, rigT), { duration: SWING_RIG.has(name) ? s.ms : 4200, iterations: Infinity });
+    });
+    blendThen(body.current, REST_BODY, () => {
+      if (SWING_RIG.has(name)) return;
+      body.current?.animate(keyframes(s.frames, bodyT), { duration: s.ms, iterations: Infinity });
+    });
+    blendThen(thread.current, "scaleY(1)", () => {
+      if (!s.frames.some((f) => f.len)) return;
+      thread.current?.animate(
+        keyframes(s.frames, (f) => `scaleY(${(b + (f.len ?? 0)) / b})`),
+        { duration: s.ms, iterations: Infinity },
+      );
+    });
+  };
 
   // Watch for activity; after the chosen idle time, swing in.
   useEffect(() => {
     if (paused) return;
     const swingIn = () => {
       if (phaseRef.current === "show") return;
-      base.current = Math.round(window.innerHeight * 0.34);
+      const h = Math.round(window.innerHeight * 0.34);
+      baseRef.current = h;
+      setBase(h);
       setX(34 + Math.random() * 32);
       setStunt("swing");
       setPhase("show");
@@ -179,7 +201,6 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
       enter.cancel();
       if (iv) clearInterval(iv);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, reduced]);
 
   // Exit: swing off to the side and fade.
@@ -203,25 +224,6 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
     return () => out.cancel();
   }, [phase, reduced]);
 
-  function play(name: string) {
-    const s = STUNTS[name];
-    const b = base.current;
-    blendThen(rig.current, "rotate(0deg)", () => {
-      rig.current?.animate(keyframes(SWING_RIG.has(name) ? s.frames : SWAY, rigT), { duration: SWING_RIG.has(name) ? s.ms : 4200, iterations: Infinity });
-    });
-    blendThen(body.current, REST_BODY, () => {
-      if (SWING_RIG.has(name)) return;
-      body.current?.animate(keyframes(s.frames, bodyT), { duration: s.ms, iterations: Infinity });
-    });
-    blendThen(thread.current, "scaleY(1)", () => {
-      if (!s.frames.some((f) => f.len)) return;
-      thread.current?.animate(
-        keyframes(s.frames, (f) => `scaleY(${(b + (f.len ?? 0)) / b})`),
-        { duration: s.ms, iterations: Infinity },
-      );
-    });
-  }
-
   if (phase === "hidden") return null;
   // Shift the sprite so the raised hand sits exactly on the end of the line.
   const width = (SIZE * W) / H;
@@ -232,8 +234,8 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
   return (
     <div className="hero-swing" style={{ left: `${x}%` }} aria-hidden>
       <div className="hero-rig" ref={rig}>
-        <span className="hero-thread" ref={thread} style={{ height: base.current }} />
-        <div className="hero-body" ref={body} style={{ top: base.current }}>
+        <span className="hero-thread" ref={thread} style={{ height: base }} />
+        <div className="hero-body" ref={body} style={{ top: base }}>
           <span className="hero-holder" style={{ transform: `translate(${dx}px, ${dy}px)` }}>
             <HeroSprite look={look} size={SIZE} pose="swing" />
           </span>
