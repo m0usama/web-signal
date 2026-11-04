@@ -176,6 +176,8 @@ export function randomHero(): HeroLook {
 /** Art is drawn on a 120 × 140 canvas (a chubby, big-headed hero); round avatars crop to the head. */
 export const W = 120;
 export const H = 140;
+/** Where the raised hand is in the "swing" pose, in art units (of W × H). */
+export const HAND = { x: 101, y: 72 };
 /** The square around the head, for round avatars: [x, y, size]. */
 export const HEAD_BOX: [number, number, number] = [6, -2, 108];
 

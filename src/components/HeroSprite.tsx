@@ -68,8 +68,8 @@ export const HeroSprite = memo(function HeroSprite({
   look: HeroLook;
   size?: number;
   head?: boolean;
-  /** "hang" raises the arms, for hanging upside-down from a web line. */
-  pose?: "stand" | "hang";
+  /** "swing" raises the right hand to hold a web line (at HAND). */
+  pose?: "stand" | "swing";
   still?: boolean;
   title?: string;
   className?: string;
@@ -136,7 +136,7 @@ export const HeroSprite = memo(function HeroSprite({
   );
 });
 
-function HeroArt({ look, blink, uid, pose }: { look: HeroLook; blink: boolean; uid: string; pose: "stand" | "hang" }) {
+function HeroArt({ look, blink, uid, pose }: { look: HeroLook; blink: boolean; uid: string; pose: "stand" | "swing" }) {
   const skin = hexOf(SKINS, look.skin);
   const skinDark = shade(skin, 0.84);
   const hair = hexOf(HAIR_COLORS, look.hairColor);
@@ -178,13 +178,13 @@ function HeroArt({ look, blink, uid, pose }: { look: HeroLook; blink: boolean; u
   }
 
   // ---------------------------------------------------------------- chubby body
-  // Arms hang down when standing; when hanging upside-down they dangle
-  // "up" in the sprite (towards the ground once the sprite is flipped).
-  const hang = pose === "hang";
+  // Standing: arms by the sides. Swinging: right hand up holding the web
+  // line (see HAND), left arm flung out for balance.
+  const hang = pose === "swing";
   const arm = (side: "l" | "r") => {
     const sx = side === "l" ? 26 : 94;
     const fill = look.pattern === "split" && side === "r" ? trim : suit;
-    const turn = hang ? (side === "l" ? 155 : -155) : side === "l" ? 12 : -12;
+    const turn = hang ? (side === "l" ? 58 : -160) : side === "l" ? 12 : -12;
     return (
       <g key={`arm${side}`} transform={`rotate(${turn} ${sx} 92)`}>
         <rect x={sx - 7} y={88} width={14} height={22} rx={7} fill={fill} {...o} />

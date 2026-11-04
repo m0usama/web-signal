@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import type { HeroLook } from "@/lib/hero";
 import { HeroSprite } from "./HeroSprite";
+import { H, HAND, W } from "@/lib/hero";
+
+// Put the hero's raised hand right on the end of the web line.
+const HOLD_X = -((HAND.x - W / 2) / W) * ((150 * W) / H);
+const HOLD_Y = -(HAND.y / H) * 150;
 
 const LINE = "ESTABLISHING SECURE SIGNAL…";
 
@@ -55,8 +60,8 @@ export function Intro({ onDone, reduced, look, name }: { onDone: () => void; red
       <div className="intro-thread-wrap">
         <div className="intro-dangle">
           <span className="intro-thread" aria-hidden />
-          <span className="hero-hang">
-            <HeroSprite look={look} size={150} pose="hang" />
+          <span className="hero-holder" style={{ transform: `translate(${HOLD_X}px, ${HOLD_Y}px)` }}>
+            <HeroSprite look={look} size={150} pose="swing" />
           </span>
           {stage !== "drop" && <span className="intro-hello">HEY {name}!</span>}
         </div>
