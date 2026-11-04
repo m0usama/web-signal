@@ -1,0 +1,12 @@
+-- Covering indexes for foreign keys (Supabase performance advisor).
+create index if not exists auto_replies_reply_to_idx on private.auto_replies (reply_to);
+create index if not exists daily_answers_user_idx on public.daily_answers (user_id);
+create index if not exists daily_progress_user_idx on public.daily_progress (user_id);
+create index if not exists games_o_player_idx on public.games (o_player);
+create index if not exists games_turn_idx on public.games (turn);
+create index if not exists games_x_player_idx on public.games (x_player);
+create index if not exists hero_points_user_idx on public.hero_points (user_id);
+create index if not exists message_reactions_user_idx on public.message_reactions (user_id);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+create index if not exists race_runs_user_idx on public.race_runs (user_id);
+create index if not exists spark_answers_user_idx on public.spark_answers (user_id);
