@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SpiderLook } from "@/lib/spider";
-import { SpiderSprite } from "./SpiderSprite";
+import type { HeroLook } from "@/lib/hero";
+import { HeroSprite } from "./HeroSprite";
 
 const IDLE_MS = 45_000;
 const TRICKS = ["swing", "spin", "flip", "yoyo", "wave", "hearts", "bounce"] as const;
 type Trick = (typeof TRICKS)[number];
 
 const LINES: Record<Trick, string[]> = {
-  swing: ["wheee!", "swing time 🕸", "look ma, no hands!"],
+  swing: ["wheee!", "swing time 🕸", "hanging around!"],
   spin: ["spin spin spin!", "*dizzy*", "triple spin!"],
-  flip: ["backflip!", "upside down is my best side", "ta-da!"],
+  flip: ["backflip!", "upside down is my best side", "the world looks funny"],
   yoyo: ["boing!", "yo-yo mode", "up… and down!"],
   wave: ["hi there 👋", "still here?", "psst… you there?"],
   hearts: ["sending love 💜", "miss you already", "💕💕💕"],
@@ -23,10 +23,10 @@ function pick<T>(a: readonly T[]): T {
 }
 
 /**
- * When nobody touches the app for a while, your spider drops down on a
- * thread and shows off. Any touch sends it zipping back up.
+ * When nobody touches the app for a while, your hero swings down upside-down
+ * on a web line and shows off. Any touch sends it zipping back up.
  */
-export function IdleSpider({ look, reduced, paused }: { look: SpiderLook; reduced: boolean; paused: boolean }) {
+export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: boolean; paused: boolean }) {
   const [phase, setPhase] = useState<"hidden" | "enter" | "show" | "exit">("hidden");
   const [trick, setTrick] = useState<Trick>("swing");
   const [line, setLine] = useState("");
@@ -102,7 +102,9 @@ export function IdleSpider({ look, reduced, paused }: { look: SpiderLook; reduce
       <div className="idle-rig">
         <span className="idle-thread" />
         <div className="idle-body">
-          <SpiderSprite look={look} size={96} />
+          <span className="hero-hang">
+            <HeroSprite look={look} size={104} />
+          </span>
           {trick === "hearts" && phase === "show" && (
             <span className="idle-hearts">
               <i>💜</i>

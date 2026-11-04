@@ -4453,3 +4453,69 @@ input[type="datetime-local"].field {
     animation: none;
   }
 }
+
+/* ================================================================== HERO AVATAR */
+.avatar-art.is-hero {
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #6fa8ff 0 30%, #1f4fe0 75%);
+  box-shadow: 0 0 0 var(--px) var(--ink);
+}
+
+.avatar-art.is-hero svg {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-a.is-hero {
+  background: radial-gradient(circle at 50% 40%, #ff9fd0 0 30%, #a75cff 75%);
+}
+
+.avatar-c.is-hero {
+  background: radial-gradient(circle at 50% 40%, #8ff4ff 0 30%, #14b8c4 75%);
+}
+
+/* the idle hero hangs upside-down from its thread by the feet */
+.hero-hang {
+  display: block;
+  transform: rotate(180deg);
+}
+
+.builder-sub {
+  display: grid;
+  gap: 6px;
+}
+
+.builder-head {
+  display: inline-grid;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #6fa8ff 0 30%, #1f4fe0 75%);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.builder-stage .builder-head {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+.builder-stage {
+  position: relative;
+}
+
+.builder-tabs.builder-tabs-5 button {
+  font-size: 10px;
+  padding: 8px 2px;
+}
+
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch-row .swatch {
+  width: 34px;
+  height: 34px;
+}

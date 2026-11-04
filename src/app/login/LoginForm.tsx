@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import { SpiderSprite } from "@/components/SpiderSprite";
-import { DEFAULT_LOOKS } from "@/lib/spider";
+import { HeroSprite } from "@/components/HeroSprite";
+import { DEFAULT_HEROES } from "@/lib/hero";
 import { normaliseUsername, USERNAME_PATTERN, usernameToEmail } from "@/lib/username";
 
 export function LoginForm() {
@@ -49,7 +49,7 @@ export function LoginForm() {
       >
         <span className="login-spider" aria-hidden>
           <span className="login-thread" />
-          <SpiderSprite look={DEFAULT_LOOKS.b} size={84} />
+          <HeroSprite look={DEFAULT_HEROES.b} size={92} />
         </span>
         <h1 className="login-title">WEB//SIGNAL</h1>
         <p className="lcd small">PRIVATE FREQUENCY · TWO HEROES ONLY</p>

@@ -15,8 +15,8 @@ export interface Profile {
   map_y: number;
   last_seen_at: string | null;
   foreground?: boolean;
-  /** Build-your-own spider look (see lib/spider.ts); null = default for the avatar. */
-  spider?: unknown;
+  /** Build-your-own hero look (see lib/hero.ts); null = use the photo avatar. */
+  look?: unknown;
   mood?: Mood | null;
   mood_at?: string | null;
 }

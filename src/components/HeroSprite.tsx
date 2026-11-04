@@ -1,20 +1,24 @@
 "use client";
 
 import { memo, useEffect, useMemo, useState } from "react";
-import { GRID, spiderRuns, type SpiderLook } from "@/lib/spider";
+import { H, HEAD_BOX, heroRuns, W, type HeroLook } from "@/lib/hero";
 
-/** Pixel spider from a look. Blinks now and then unless `still`. */
-export const SpiderSprite = memo(function SpiderSprite({
+/**
+ * Pixel hero from a look. `size` is the height in px (full body) or the
+ * width/height of the square head crop when `head` is set. Blinks now and
+ * then unless `still`.
+ */
+export const HeroSprite = memo(function HeroSprite({
   look,
   size = 96,
-  thread = false,
+  head = false,
   still = false,
   title,
   className,
 }: {
-  look: SpiderLook;
+  look: HeroLook;
   size?: number;
-  thread?: boolean;
+  head?: boolean;
   still?: boolean;
   title?: string;
   className?: string;
@@ -36,16 +40,18 @@ export const SpiderSprite = memo(function SpiderSprite({
     return () => clearTimeout(t);
   }, [still]);
 
-  const open = useMemo(() => spiderRuns(look, { thread }), [look, thread]);
-  const closed = useMemo(() => spiderRuns(look, { thread, blink: true }), [look, thread]);
+  const open = useMemo(() => heroRuns(look), [look]);
+  const closed = useMemo(() => heroRuns(look, { blink: true }), [look]);
   const runs = blink ? closed : open;
+  const [hx, hy, hs] = HEAD_BOX;
+  const viewBox = head ? `${hx} ${hy} ${hs} ${hs}` : `0 0 ${W} ${H}`;
 
   return (
     <svg
       className={className}
-      width={size}
+      width={head ? size : Math.round((size * W) / H)}
       height={size}
-      viewBox={`0 0 ${GRID} ${GRID}`}
+      viewBox={viewBox}
       shapeRendering="crispEdges"
       role={title ? "img" : undefined}
       aria-label={title}

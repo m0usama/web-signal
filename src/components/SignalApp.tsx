@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Building } from "@/lib/city";
 import { friendlyError } from "@/lib/messages";
 import { BADGES, POKES } from "@/lib/pixels";
@@ -13,8 +13,9 @@ import { DropComposer, type DropDraft } from "./DropComposer";
 import { Header } from "./Header";
 import { Icon } from "./Icon";
 import { Intro } from "./Intro";
-import { IdleSpider } from "./IdleSpider";
-import { normaliseLook } from "@/lib/spider";
+import { IdleHero } from "./IdleHero";
+import { normaliseHero } from "@/lib/hero";
+import { setAvatarLooks } from "@/lib/lookStore";
 import { ProfilePanel } from "./Profile";
 import { Reveal, type RevealTarget } from "./Reveal";
 import { Secret } from "./Secret";
@@ -416,7 +417,15 @@ export function SignalApp({
         return { tone: "idle", text: "" };
     }
   };
-  const myLook = normaliseLook(room.me.spider, room.me.avatar_key);
+  // Round avatars everywhere show each person's hero head once they've built one.
+  useEffect(() => {
+    const next: Record<string, unknown> = {};
+    for (const c of contacts) next[c.partner.avatar_key] = c.partner.look ?? null;
+    next[room.partner.avatar_key] = room.partner.look ?? null;
+    next[room.me.avatar_key] = room.me.look ?? null;
+    setAvatarLooks(next);
+  }, [contacts, room.me.avatar_key, room.me.look, room.partner.avatar_key, room.partner.look]);
+  const myLook = useMemo(() => normaliseHero(room.me.look, room.me.avatar_key), [room.me.look, room.me.avatar_key]);
   const landmarks = boot.chatOnly ? [] : LANDMARKS.map((lm) => ({ lm, status: status(lm.key) }));
   const questTurns = landmarks.filter((l) => l.status.tone === "turn" || l.status.tone === "new").length;
 
@@ -871,9 +880,9 @@ export function SignalApp({
                   }
                 }}
                 onChangePassword={changePassword}
-                onSaveSpider={async (look) => {
+                onSaveLook={async (look) => {
                   try {
-                    await room.actions.saveSpider({ ...look });
+                    await room.actions.saveLook({ ...look });
                     toast({ text: "SPIDER SAVED 🕷", icon: "sparkle", tone: "love" });
                   } catch (e) {
                     toast({ text: friendlyError(e), tone: "warn" });
@@ -1061,7 +1070,7 @@ export function SignalApp({
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
-      <IdleSpider look={myLook} reduced={reduced} paused={!introDone || !!quest || !!reveal || mapMode !== "browse" || tunePicker} />
+      <IdleHero look={myLook} reduced={reduced} paused={!introDone || !!quest || !!reveal || mapMode !== "browse" || tunePicker} />
       {!introDone && <Intro onDone={finishIntro} reduced={reduced} look={myLook} name={room.me.display_name} />}
     </div>
   );

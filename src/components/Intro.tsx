@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { SpiderLook } from "@/lib/spider";
-import { SpiderSprite } from "./SpiderSprite";
+import type { HeroLook } from "@/lib/hero";
+import { HeroSprite } from "./HeroSprite";
 
 const LINE = "ESTABLISHING SECURE SIGNAL…";
 
 /**
- * Start screen: your spider drops down on its thread under the sign, says hi,
+ * Start screen: your hero drops down on its thread under the sign, says hi,
  * and the signal locks in. Plays once per app launch; always skippable.
  */
-export function Intro({ onDone, reduced, look, name }: { onDone: () => void; reduced: boolean; look: SpiderLook; name: string }) {
+export function Intro({ onDone, reduced, look, name }: { onDone: () => void; reduced: boolean; look: HeroLook; name: string }) {
   const [typed, setTyped] = useState(reduced ? LINE.length : 0);
   const [stage, setStage] = useState<"drop" | "hello" | "locked" | "out">(reduced ? "locked" : "drop");
 
@@ -55,7 +55,7 @@ export function Intro({ onDone, reduced, look, name }: { onDone: () => void; red
       <div className="intro-thread-wrap">
         <div className="intro-dangle">
           <span className="intro-thread" aria-hidden />
-          <SpiderSprite look={look} size={132} />
+          <HeroSprite look={look} size={150} />
           {stage !== "drop" && <span className="intro-hello">HEY {name}!</span>}
         </div>
       </div>
