@@ -9,13 +9,13 @@ import { useAvatarLook } from "@/lib/lookStore";
 import { hasLook, normaliseHero } from "@/lib/hero";
 
 /**
- * Shows the portrait in /public/avatars/<key>.png
- * (a = SpiderGwen, b = Spidey, c = J.A.R.V.I.S), falling back to a pixel placeholder.
- * Once someone has built a hero, their hero's head is shown instead.
+ * Round avatar = the head of the person's hero (their saved look, or the
+ * default hero for their avatar key). J.A.R.V.I.S keeps its photo
+ * (/public/avatars/c.png) until a hero is saved for it.
  */
 export function Avatar({ avatarKey, size, label }: { avatarKey: AvatarKey; size: number; label?: string }) {
   const look = useAvatarLook(avatarKey);
-  if (hasLook(look)) {
+  if (hasLook(look) || avatarKey !== "c") {
     return (
       <span className={`avatar-art avatar-${avatarKey} is-hero`} style={{ width: size, height: size }}>
         <HeroSprite look={normaliseHero(look, avatarKey)} size={size} head still={size < 40} title={label} />

@@ -4519,3 +4519,54 @@ input[type="datetime-local"].field {
   width: 34px;
   height: 34px;
 }
+
+/* the hero swings in on its web line like a pendulum, then settles */
+.idle-spider.phase-enter .idle-rig {
+  animation: hero-swing-in 2.3s cubic-bezier(0.35, 0, 0.4, 1) both;
+}
+
+.idle-spider.phase-exit .idle-rig {
+  animation: hero-swing-out 650ms ease-in both;
+}
+
+@keyframes hero-swing-in {
+  0% {
+    transform: rotate(-78deg);
+  }
+  38% {
+    transform: rotate(30deg);
+  }
+  62% {
+    transform: rotate(-14deg);
+  }
+  80% {
+    transform: rotate(6deg);
+  }
+  92% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+@keyframes hero-swing-out {
+  to {
+    transform: rotate(70deg);
+  }
+}
+
+.idle-spider .idle-line {
+  left: calc(50% + 58px);
+}
+
+.idle-setting {
+  display: grid;
+  gap: 8px;
+  margin: -6px 0 18px;
+}
+
+.idle-setting .seg button {
+  padding: 8px 2px;
+  font-size: 10px;
+}

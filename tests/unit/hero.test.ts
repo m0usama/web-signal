@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HEROES, H, HATS, hasLook, heroPixels, MASKS, normaliseHero, OUTFITS, randomHero, W } from "@/lib/hero";
+import { DEFAULT_HEROES, glowOn, hasLook, normaliseHero, randomHero, shade } from "@/lib/hero";
 
 describe("hero", () => {
   it("falls back to the avatar's default for bad input", () => {
@@ -9,14 +9,10 @@ describe("hero", () => {
     expect(hasLook({ skin: "s2" })).toBe(true);
   });
 
-  it("draws every mask, hat and outfit inside the grid", () => {
-    for (const m of MASKS)
-      for (const h of HATS)
-        for (const o of OUTFITS) {
-          const g = heroPixels({ ...DEFAULT_HEROES.b, mask: m.key, hat: h.key, outfit: o.key });
-          expect(g.length).toBe(H);
-          expect(g.every((r) => r.length === W)).toBe(true);
-        }
+  it("picks readable visor eye colours and shades", () => {
+    expect(glowOn("#FFC93C")).toBe("#10101E");
+    expect(glowOn("#2A2A44")).toBe("#7DF9FF");
+    expect(shade("#808080", 0.5)).toBe("#404040");
   });
 
   it("random looks are valid", () => {

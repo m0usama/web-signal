@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { HeroLook } from "@/lib/hero";
 import { HeroSprite } from "./HeroSprite";
+import { HERO_DEMO_EVENT, useIdleMs } from "@/lib/idlePref";
 
-const IDLE_MS = 45_000;
 const TRICKS = ["swing", "spin", "flip", "yoyo", "wave", "hearts", "bounce"] as const;
 type Trick = (typeof TRICKS)[number];
 
@@ -27,6 +27,7 @@ function pick<T>(a: readonly T[]): T {
  * on a web line and shows off. Any touch sends it zipping back up.
  */
 export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: boolean; paused: boolean }) {
+  const idleMs = useIdleMs();
   const [phase, setPhase] = useState<"hidden" | "enter" | "show" | "exit">("hidden");
   const [trick, setTrick] = useState<Trick>("swing");
   const [line, setLine] = useState("");
@@ -40,16 +41,21 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
   // Watch for activity; after IDLE_MS of nothing, drop in.
   useEffect(() => {
     if (paused) return;
+    const swingIn = () => {
+      setX(30 + Math.random() * 40);
+      setTrick("swing");
+      setLine("");
+      setPhase("enter");
+    };
     const arm = () => {
       if (idleTimer.current) clearTimeout(idleTimer.current);
+      if (!idleMs) return;
       idleTimer.current = setTimeout(() => {
         if (document.visibilityState !== "visible") return arm();
-        setX(18 + Math.random() * 64);
-        setTrick(pick(TRICKS));
-        setLine("");
-        setPhase("enter");
-      }, IDLE_MS);
+        swingIn();
+      }, idleMs);
     };
+    const demo = () => setTimeout(swingIn, 50);
     const wake = () => {
       if (phaseRef.current === "enter" || phaseRef.current === "show") setPhase("exit");
       arm();
@@ -57,13 +63,15 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
     const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
     events.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }));
     document.addEventListener("visibilitychange", wake);
+    window.addEventListener(HERO_DEMO_EVENT, demo);
     arm();
     return () => {
       if (idleTimer.current) clearTimeout(idleTimer.current);
       events.forEach((e) => window.removeEventListener(e, wake, { capture: true }));
       document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener(HERO_DEMO_EVENT, demo);
     };
-  }, [paused]);
+  }, [paused, idleMs]);
 
   // Hide straight away if something important opens.
   useEffect(() => {
@@ -78,7 +86,7 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
       const t = setTimeout(() => {
         setLine(pick(LINES[trick]));
         setPhase("show");
-      }, reduced ? 200 : 1300);
+      }, reduced ? 200 : 2300);
       return () => clearTimeout(t);
     }
     if (phase === "exit") {
@@ -103,7 +111,7 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
         <span className="idle-thread" />
         <div className="idle-body">
           <span className="hero-hang">
-            <HeroSprite look={look} size={104} />
+            <HeroSprite look={look} size={120} />
           </span>
           {trick === "hearts" && phase === "show" && (
             <span className="idle-hearts">

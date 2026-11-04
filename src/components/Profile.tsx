@@ -11,6 +11,7 @@ import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 import { HeroBuilder } from "./HeroBuilder";
 import type { HeroLook } from "@/lib/hero";
+import { HERO_DEMO_EVENT, IDLE_CHOICES, setIdleMs, useIdleMs } from "@/lib/idlePref";
 
 export function ProfilePanel({
   me,
@@ -61,6 +62,7 @@ export function ProfilePanel({
 
       <h2 className="panel-title">🦸 MY HERO</h2>
       <HeroBuilder initial={me.look} avatarKey={me.avatar_key} onSave={onSaveLook} />
+      <IdleSetting />
 
       <form
         className="row-between gap"
@@ -215,5 +217,25 @@ export function ProfilePanel({
         </button>
       </form>
     </section>
+  );
+}
+
+/** When nobody touches the app for this long, your hero swings down and does stunts. */
+function IdleSetting() {
+  const idleMs = useIdleMs();
+  return (
+    <div className="idle-setting">
+      <p className="lcd small">HERO SWINGS DOWN AFTER NO TOUCHING FOR…</p>
+      <div className="seg" role="radiogroup" aria-label="Hero swing-down timer">
+        {IDLE_CHOICES.map((c) => (
+          <button key={c.ms} type="button" role="radio" aria-checked={idleMs === c.ms} className={idleMs === c.ms ? "on" : ""} onClick={() => setIdleMs(c.ms)}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="btn btn-ghost" onClick={() => window.dispatchEvent(new Event(HERO_DEMO_EVENT))}>
+        🕸 SHOW ME THE SWING NOW
+      </button>
+    </div>
   );
 }
