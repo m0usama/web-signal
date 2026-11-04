@@ -459,7 +459,7 @@ function HeroArt({ look, blink, uid, pose }: { look: HeroLook; blink: boolean; u
       break;
     case "earrings":
       face.push(
-        <g key="er" fill={YELLOW} {...o} strokeWidth={1.5}>
+        <g key="earr" fill={YELLOW} {...o} strokeWidth={1.5}>
           <circle cx={20} cy={74} r={4} />
           <circle cx={100} cy={74} r={4} />
         </g>,

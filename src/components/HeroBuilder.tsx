@@ -104,7 +104,7 @@ export function HeroBuilder({
     <div className="builder">
       <div className="builder-stage">
         <span key={hop} className="builder-hop">
-          <HeroSprite look={look} size={160} title="Your hero" />
+          <HeroSprite look={look} size={136} title="Your hero" />
         </span>
         <span className="builder-head" title="How you look in chats">
           <HeroSprite look={look} size={48} head still />

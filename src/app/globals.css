@@ -5020,3 +5020,156 @@ input[type="datetime-local"].field {
 .idle-hero.calm .idle-webshot {
   display: none;
 }
+
+/* ================================================================== SWINGING HERO (v3) */
+.hero-swing {
+  position: fixed;
+  top: 0;
+  z-index: 85;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.hero-rig {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.hero-thread {
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 2px;
+  background: #f8f5ff;
+  box-shadow: 0 0 4px rgba(248, 245, 255, 0.7);
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+
+.hero-body {
+  position: absolute;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.hero-body .hero-holder {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.hero-body .hero-holder img {
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.35));
+}
+
+.hero-fx {
+  position: absolute;
+  top: -30px;
+  left: 30px;
+  pointer-events: none;
+}
+
+.hero-fx i {
+  position: absolute;
+  font-style: normal;
+  font-size: 20px;
+  opacity: 0;
+  animation: hero-fx-float 2.4s ease-out 0.7s infinite;
+}
+
+.hero-fx i:nth-child(2) {
+  animation-delay: 1.5s;
+  margin-left: -34px;
+}
+
+.hero-fx i:nth-child(3) {
+  animation-delay: 2.3s;
+  margin-left: 20px;
+}
+
+.fx-sleepy i {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: #f8f5ff;
+}
+
+@keyframes hero-fx-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+.hero-webshot {
+  position: absolute;
+  top: -4px;
+  left: 6px;
+  height: 2px;
+  width: 38vw;
+  background: #f8f5ff;
+  box-shadow: 0 0 6px rgba(248, 245, 255, 0.8);
+  transform-origin: 0 50%;
+  animation: hero-webshot 2.4s ease-out 0.7s infinite both;
+}
+
+@keyframes hero-webshot {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  30% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+.hero-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  opacity: 0;
+  animation: hero-flash 2.8s ease-out 0.7s infinite;
+}
+
+@keyframes hero-flash {
+  0%,
+  45% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  70%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* keep the hero preview in view while scrolling through builder options */
+.builder-stage {
+  position: sticky;
+  top: -14px;
+  z-index: 5;
+  height: 150px;
+}
