@@ -5173,3 +5173,35 @@ input[type="datetime-local"].field {
   z-index: 5;
   height: 150px;
 }
+
+/* login: show/hide password */
+.pw-wrap {
+  position: relative;
+  display: block;
+}
+
+.pw-wrap .field {
+  width: 100%;
+  padding-right: 72px;
+}
+
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-height: 36px;
+  padding: 0 10px;
+  border: 2px solid var(--ink, #10101e);
+  background: #2a2a44;
+  color: #f8f5ff;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.pw-toggle[aria-pressed="true"] {
+  background: #ff65ad;
+  color: #10101e;
+}

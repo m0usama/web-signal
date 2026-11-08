@@ -11,6 +11,7 @@ export function LoginForm() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState("");
@@ -69,14 +70,28 @@ export function LoginForm() {
         </label>
         <label className="field-label">
           PASSWORD
-          <input
-            className="field"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <span className="pw-wrap">
+            <input
+              className="field"
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="pw-toggle"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? "Hide what you typed" : "Show what you typed"}
+              aria-pressed={showPw}
+            >
+              {showPw ? "HIDE" : "SHOW"}
+            </button>
+          </span>
         </label>
         {error && (
           <p className="form-error" role="alert">
