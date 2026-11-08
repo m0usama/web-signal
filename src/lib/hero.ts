@@ -234,7 +234,7 @@ export function faceChars(face: string): string[] {
 export function cleanFace(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   // eslint-disable-next-line no-control-regex
-  const chars = faceChars(raw.normalize("NFC")).filter((c) => c.trim() !== "" && !/[\u0000-\u001f<>&"]/.test(c));
+  const chars = faceChars(raw.normalize("NFC")).filter((c) => c.trim() !== "" && !/[\u0000-\u001f\u007f]/.test(c));
   return chars.length === 3 ? chars.join("") : null;
 }
 

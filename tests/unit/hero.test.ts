@@ -24,7 +24,8 @@ describe("hero", () => {
     expect(faceChars("😀_😀")).toHaveLength(3);
     expect(cleanFace("^^")).toBeNull();
     expect(cleanFace("^ ^")).toBeNull();
-    expect(cleanFace("<_>")).toBeNull();
+    expect(cleanFace(">_<")).toBe(">_<");
+    expect(cleanFace("a\u0000b")).toBeNull();
     expect(cleanFace(42)).toBeNull();
   });
 
