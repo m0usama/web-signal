@@ -66,9 +66,23 @@ export interface Message {
   opened_at: string | null;
   created_at: string;
   duration_ms?: number | null;
+  /** The message this one replies to (same chat), if any. */
+  reply_to?: string | null;
   /** Client-only state for optimistic sends. */
   _status?: "sending" | "failed";
+  /** Client-only: playing its disappear animation before removal. */
+  _leaving?: boolean;
   _localPreview?: string;
+}
+
+/** A message pinned for both people (max 3 per chat). */
+export interface MessagePin {
+  message_id: string;
+  room_id: string;
+  pinned_by: string;
+  pinned_at: string;
+  /** Client-only: playing its disappear animation before removal. */
+  _leaving?: boolean;
 }
 
 export interface Reaction {

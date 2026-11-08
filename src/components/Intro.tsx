@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import type { HeroLook } from "@/lib/hero";
 import { HeroSprite } from "./HeroSprite";
-import { H, HAND, W } from "@/lib/hero";
+import { H, HAND, TOP, W } from "@/lib/hero";
 
 // Put the hero's raised hand right on the end of the web line.
 const HOLD_X = -((HAND.x - W / 2) / W) * ((150 * W) / H);
-const HOLD_Y = -(HAND.y / H) * 150;
+const HOLD_Y = -((HAND.y - TOP) / H) * 150;
 
 const LINE = "ESTABLISHING SECURE SIGNAL…";
 

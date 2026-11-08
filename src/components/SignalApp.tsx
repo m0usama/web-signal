@@ -6,7 +6,7 @@ import { friendlyError } from "@/lib/messages";
 import { BADGES, POKES } from "@/lib/pixels";
 import { synth } from "@/lib/sound";
 import type { Bootstrap, Contact, Message, PokeKind, SignalDrop, Tab } from "@/lib/types";
-import { useRoom, type Room } from "@/lib/useRoom";
+import { useRoom, type Room, type WalkieSignal } from "@/lib/useRoom";
 import { CityMap, type Bubble, type Flight, type MapMode } from "./CityMap";
 import { Comms } from "./Comms";
 import { DropComposer, type DropDraft } from "./DropComposer";
@@ -14,6 +14,7 @@ import { Header } from "./Header";
 import { Icon } from "./Icon";
 import { Intro } from "./Intro";
 import { IdleHero } from "./IdleHero";
+import { Walkie } from "./Walkie";
 import { normaliseHero } from "@/lib/hero";
 import { setAvatarLooks } from "@/lib/lookStore";
 import { ProfilePanel } from "./Profile";
@@ -148,6 +149,7 @@ export function SignalApp({
   const hearts = useRef({ mine: 0, theirs: 0 });
   const prefersReduced = useReducedMotion();
   // Handlers passed into useRoom run later; these refs give them the latest values.
+  const walkieHandler = useRef<((s: WalkieSignal) => void) | null>(null);
   const roomRef = useRef<Room | null>(null);
   const enableSoundRef = useRef<() => void>(() => {});
   // Live doodle: shared log + listeners (kept here so the drawing survives tab switches).
@@ -324,9 +326,35 @@ export function SignalApp({
         toast({ text: `${boot.partner.display_name} IS ONLINE`, icon: "sparkle", tone: "love" });
         party();
       },
+      onWalkie: (sig) => walkieHandler.current?.(sig),
     },
     tab,
   );
+
+  // ------------------------------------------------------------ walkie-talkie
+  const [walkie, setWalkie] = useState<"off" | "open" | "mini">("off");
+  const registerWalkie = useCallback((fn: ((s: WalkieSignal) => void) | null) => {
+    walkieHandler.current = fn;
+  }, []);
+  const sendWalkie = useCallback((sig: WalkieSignal) => roomRef.current?.actions.broadcast("walkie", { ...sig }) ?? false, []);
+  const setWalkieOn = useCallback((on: boolean) => roomRef.current?.actions.setWalkieOn(on), []);
+  const partnerOnWalkie = !!room.presence.walkie;
+  const prevPartnerWalkie = useRef(false);
+  useEffect(() => {
+    if (partnerOnWalkie && !prevPartnerWalkie.current && walkie === "off") {
+      toast(
+        {
+          text: `${boot.partner.display_name} OPENED THE WALKIE 📻`,
+          tone: "love",
+          action: { label: "JOIN", run: () => setWalkie("open") },
+        },
+        9000,
+      );
+      synth.play("poke");
+    }
+    prevPartnerWalkie.current = partnerOnWalkie;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerOnWalkie]);
 
   // ------------------------------------------------------------------ City Quests
   const quests = useQuests(room.supabase, boot.roomId, boot.me.id, !boot.chatOnly, {
@@ -808,6 +836,9 @@ export function SignalApp({
                 }}
                 onToast={(text, tone) => toast({ text, tone })}
                 onSent={() => synth.play("send")}
+                walkieOn={walkie !== "off"}
+                partnerOnWalkie={partnerOnWalkie}
+                onOpenWalkie={() => setWalkie("open")}
               />
             )}
             {tab === "signals" && (
@@ -1070,7 +1101,21 @@ export function SignalApp({
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
-      <IdleHero look={myLook} reduced={reduced} paused={!introDone || !!quest || !!reveal || mapMode !== "browse" || tunePicker} />
+      {walkie !== "off" && (
+        <Walkie
+          me={room.me}
+          partner={room.partner}
+          presence={room.presence}
+          minimized={walkie === "mini"}
+          send={sendWalkie}
+          setOn={setWalkieOn}
+          register={registerWalkie}
+          onMinimize={() => setWalkie("mini")}
+          onExpand={() => setWalkie("open")}
+          onLeave={() => setWalkie("off")}
+        />
+      )}
+      <IdleHero look={myLook} reduced={reduced} paused={!introDone || !!quest || !!reveal || mapMode !== "browse" || tunePicker || walkie === "open"} />
       {!introDone && <Intro onDone={finishIntro} reduced={reduced} look={myLook} name={room.me.display_name} />}
     </div>
   );

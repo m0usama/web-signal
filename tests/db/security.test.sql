@@ -528,6 +528,39 @@ select t.throws($$select public.web4_new((select v::uuid from ctx where k='room2
 select t.throws($$select public.race_submit((select v::uuid from ctx where k='room2'), 30000)$$, 'CHAT_ONLY', 'no races in a chat-only room');
 reset role;
 
+-- ================================================================== replies + pins
+select t.as_user('aaaaaaaa-0000-0000-0000-000000000001'); set local role authenticated;
+insert into public.messages (room_id, client_id, kind, body) values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'pin me 1');
+insert into public.messages (room_id, client_id, kind, body, reply_to) values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'a reply',
+  (select id from public.messages where body = 'pin me 1'));
+select t.ok((select reply_to is not null from public.messages where body = 'a reply'), 'replies point at the message they answer');
+insert into public.messages (room_id, client_id, kind, body, reply_to) values ((select v::uuid from ctx where k = 'room2'), gen_random_uuid(), 'text', 'cross reply',
+  (select id from public.messages where body = 'pin me 1'));
+select t.ok((select reply_to is null from public.messages where body = 'cross reply'), 'a reply cannot point into another chat');
+insert into public.messages (room_id, client_id, kind, body) values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'pin me 2');
+insert into public.messages (room_id, client_id, kind, body) values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'pin me 3');
+insert into public.messages (room_id, client_id, kind, body) values ((select v::uuid from ctx where k = 'room'), gen_random_uuid(), 'text', 'pin me 4');
+select public.pin_message((select id from public.messages where body = 'pin me 1'));
+select pg_sleep(0.01);
+select public.pin_message((select id from public.messages where body = 'pin me 2'));
+select pg_sleep(0.01);
+reset role; select t.as_user('bbbbbbbb-0000-0000-0000-000000000002'); set local role authenticated;
+select public.pin_message((select id from public.messages where body = 'pin me 3'));
+select t.ok((select count(*) = 3 from public.message_pins where room_id = (select v::uuid from ctx where k = 'room')), 'both people share the same pins');
+select pg_sleep(0.01);
+select public.pin_message((select id from public.messages where body = 'pin me 4'));
+select t.ok((select count(*) = 3 from public.message_pins where room_id = (select v::uuid from ctx where k = 'room')), 'only 3 pins stay in a chat');
+select t.ok((select not exists (select 1 from public.message_pins p join public.messages m on m.id = p.message_id where m.body = 'pin me 1')), 'the oldest pin drops off');
+select public.unpin_message((select id from public.messages where body = 'pin me 4'));
+select t.ok((select count(*) = 2 from public.message_pins where room_id = (select v::uuid from ctx where k = 'room')), 'either person can unpin');
+select t.throws($$insert into public.message_pins (message_id, room_id, pinned_by) values ((select id from public.messages where body = 'pin me 1'), (select v::uuid from ctx where k='room'), auth.uid())$$, 'permission denied|row-level security', 'pins only change through pin_message');
+reset role;
+insert into ctx values ('pinmsg', (select id::text from public.messages where body = 'pin me 2'));
+select t.as_user('cccccccc-0000-0000-0000-000000000003'); set local role authenticated;
+select t.ok((select count(*) = 0 from public.message_pins where room_id = (select v::uuid from ctx where k = 'room')), 'others cannot see your pins');
+select t.throws($$select public.pin_message((select v::uuid from ctx where k = 'pinmsg'))$$, 'NOT_ALLOWED', 'others cannot pin your messages');
+reset role;
+
 -- outsider
 select t.as_user('cccccccc-0000-0000-0000-000000000003'); set local role authenticated;
 select t.ok((select count(*) = 0 from public.hero_points where room_id = (select v::uuid from ctx where k = 'room')), 'others cannot see your points');

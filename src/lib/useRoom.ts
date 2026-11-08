@@ -15,6 +15,7 @@ import type {
   Mood,
   SparkAnswer,
   Message,
+  MessagePin,
   Poke,
   PokeKind,
   Profile,
@@ -28,6 +29,9 @@ import type {
 
 export type Connection = "connecting" | "live" | "reconnecting" | "offline";
 
+/** How long the disappear animation for deleted messages and pins runs. */
+export const VANISH_MS = 520;
+
 export interface RoomEvents {
   onMessage?: (m: Message) => void;
   onPoke?: (p: Poke) => void;
@@ -39,6 +43,8 @@ export interface RoomEvents {
   onTune?: (p: { id: string; from: string }) => void;
   /** Live, not stored: the partner's device reports what happened to our tune. */
   onTuneAck?: (p: { id: string; state: "started" | "ended" | "blocked" | "busy"; duration?: number }) => void;
+  /** Live walkie-talkie signalling from the partner. */
+  onWalkie?: (s: WalkieSignal) => void;
   /** Live doodle strokes from the partner. */
   onDoodle?: (p: DoodleEvent) => void;
   onSpark?: (a: SparkAnswer) => void;
@@ -56,6 +62,16 @@ export interface PartnerPresence {
   online: boolean;
   view: Tab | null;
   typing: boolean;
+  /** The partner is in the walkie-talkie voice room right now. */
+  walkie?: boolean;
+}
+
+/** Live walkie-talkie signalling (WebRTC offer/answer/ICE), never stored. */
+export interface WalkieSignal {
+  type: "hello" | "hello-ack" | "offer" | "answer" | "ice" | "bye";
+  sdp?: string;
+  candidate?: RTCIceCandidateInit;
+  from?: string;
 }
 
 const uuid = () => crypto.randomUUID();
@@ -66,6 +82,11 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [pins, setPins] = useState<MessagePin[]>([]);
+  const pinsRef = useRef<MessagePin[]>([]);
+  useEffect(() => {
+    pinsRef.current = pins;
+  }, [pins]);
   const [pokes, setPokes] = useState<Poke[]>([]);
   const [drops, setDrops] = useState<SignalDrop[]>([]);
   const [me, setMe] = useState<Profile>(boot.me);
@@ -93,17 +114,32 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     eventsRef.current = events;
   });
   const tabRef = useRef(currentTab);
+  const walkieRef = useRef(false);
   const presenceChannel = useRef<RealtimeChannel | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   const retries = useRef(0);
   const wasLive = useRef(false);
 
+  // Messages and pins that go away play a short disappear animation first.
+  const vanishPin = useCallback((messageId: string) => {
+    setPins((list) => (list.some((p) => p.message_id === messageId && !p._leaving) ? list.map((p) => (p.message_id === messageId ? { ...p, _leaving: true } : p)) : list));
+    setTimeout(() => setPins((list) => list.filter((p) => p.message_id !== messageId || !p._leaving)), VANISH_MS);
+  }, []);
+  const vanishMessage = useCallback(
+    (id: string) => {
+      setMessages((list) => (list.some((m) => m.id === id && !m._leaving) ? list.map((m) => (m.id === id ? { ...m, _leaving: true } : m)) : list));
+      setTimeout(() => setMessages((list) => removeMessage(list, id)), VANISH_MS);
+      vanishPin(id);
+    },
+    [vanishPin],
+  );
+
   // ------------------------------------------------------------ initial + refresh load
   const loadAll = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     const sixtyDaysAgo = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
-    const [msgs, reacts, pk, dr, profs, mems, bdg, sp, st, gm, rm] = await Promise.all([
+    const [msgs, reacts, pk, dr, profs, mems, bdg, sp, st, gm, rm, pn] = await Promise.all([
       supabase.from("messages").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(200),
       supabase.from("message_reactions").select("message_id,user_id,emoji"),
       supabase.from("pokes").select("*").eq("room_id", roomId).gte("created_at", weekAgo).order("created_at", { ascending: false }).limit(60),
@@ -118,6 +154,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       supabase.rpc("spark_streak", { p_room: roomId }),
       supabase.from("games").select("*").eq("room_id", roomId).eq("kind", "ttt").order("created_at", { ascending: false }).limit(1),
       supabase.from("private_rooms").select("next_meet_at,next_meet_label").eq("id", roomId).maybeSingle(),
+      supabase.from("message_pins").select("*").eq("room_id", roomId).order("pinned_at", { ascending: false }),
     ]);
     if (msgs.data) {
       setMessages((prev) => {
@@ -128,6 +165,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       });
     }
     if (reacts.data) setReactions(reacts.data as Reaction[]);
+    if (pn.data) setPins(pn.data as MessagePin[]);
     if (pk.data) setPokes((pk.data as Poke[]).reverse());
     if (dr.data) setDrops(dr.data as SignalDrop[]);
     if (profs.data) {
@@ -154,7 +192,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter }, (payload) => {
         if (payload.eventType === "DELETE") {
           const id = (payload.old as { id?: string }).id;
-          if (id) setMessages((list) => removeMessage(list, id));
+          if (id) vanishMessage(id);
           return;
         }
         const row = payload.new as Message;
@@ -165,6 +203,18 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           }
           return upsertMessage(list, row);
         });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_pins", filter }, (payload) => {
+        const row = payload.new as MessagePin;
+        setPins((list) => [row, ...list.filter((p) => p.message_id !== row.message_id)]);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "message_pins", filter }, (payload) => {
+        const row = payload.new as MessagePin;
+        setPins((list) => [row, ...list.filter((p) => p.message_id !== row.message_id)]);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_pins" }, (payload) => {
+        const id = (payload.old as { message_id?: string }).message_id;
+        if (id) vanishPin(id);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
         if (payload.eventType === "DELETE") {
@@ -291,11 +341,11 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       presenceChannel.current = ch;
 
       const readPresence = () => {
-        const state = ch.presenceState<{ view: Tab }>();
+        const state = ch.presenceState<{ view: Tab; walkie?: boolean }>();
         const theirs = state[boot.partner.id]?.[0];
         setPresence((p) => {
           if (!p.online && theirs) queueMicrotask(() => eventsRef.current.onPartnerArrive?.());
-          return { online: !!theirs, view: theirs?.view ?? null, typing: theirs ? p.typing : false };
+          return { online: !!theirs, view: theirs?.view ?? null, typing: theirs ? p.typing : false, walkie: !!theirs?.walkie };
         });
       };
 
@@ -316,6 +366,9 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
         .on("broadcast", { event: "doodle" }, ({ payload }) => {
           if (payload?.from === boot.partner.id) eventsRef.current.onDoodle?.(payload as DoodleEvent);
         })
+        .on("broadcast", { event: "walkie" }, ({ payload }) => {
+          if (payload?.from === boot.partner.id && typeof payload.type === "string") eventsRef.current.onWalkie?.(payload as WalkieSignal);
+        })
         .on("broadcast", { event: "tune-ack" }, ({ payload }) => {
           if (payload?.from === boot.partner.id && typeof payload.id === "string") eventsRef.current.onTuneAck?.(payload);
         })
@@ -323,10 +376,10 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           if (disposed) return;
           if (status === "SUBSCRIBED") {
             presenceRetries.current = 0;
-            await ch.track({ view: tabRef.current, at: Date.now() });
+            await ch.track({ view: tabRef.current, at: Date.now(), walkie: walkieRef.current });
             if (heartbeat) clearInterval(heartbeat);
             heartbeat = setInterval(() => {
-              if (!disposed && document.visibilityState === "visible") void ch.track({ view: tabRef.current, at: Date.now() });
+              if (!disposed && document.visibilityState === "visible") void ch.track({ view: tabRef.current, at: Date.now(), walkie: walkieRef.current });
             }, 30_000);
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             setPresence((p) => ({ ...p, online: false, typing: false }));
@@ -358,7 +411,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   // Tell the partner which screen we are on.
   useEffect(() => {
     tabRef.current = currentTab;
-    void presenceChannel.current?.track({ view: currentTab, at: Date.now() });
+    void presenceChannel.current?.track({ view: currentTab, at: Date.now(), walkie: walkieRef.current });
   }, [currentTab]);
 
   // ------------------------------------------------------------ last seen + online/offline + visibility
@@ -440,6 +493,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
           mode: draft.mode,
           ghost_seconds: draft.ghost_seconds,
           ...(draft.duration_ms ? { duration_ms: draft.duration_ms } : {}),
+          ...(draft.reply_to ? { reply_to: draft.reply_to } : {}),
         })
         .select("*")
         .single();
@@ -454,7 +508,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   );
 
   const sendText = useCallback(
-    (body: string, mode: SignalMode) =>
+    (body: string, mode: SignalMode, replyTo?: string | null) =>
       insertMessage({
         client_id: uuid(),
         kind: "text",
@@ -463,12 +517,13 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
         media_path: null,
         mode: mode === "ghost" ? "day" : mode,
         ghost_seconds: 10,
+        reply_to: replyTo ?? null,
       }),
     [insertMessage],
   );
 
   const sendSticker = useCallback(
-    (sticker: string, mode: SignalMode) =>
+    (sticker: string, mode: SignalMode, replyTo?: string | null) =>
       insertMessage({
         client_id: uuid(),
         kind: "sticker",
@@ -477,6 +532,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
         media_path: null,
         mode: mode === "ghost" ? "day" : mode,
         ghost_seconds: 10,
+        reply_to: replyTo ?? null,
       }),
     [insertMessage],
   );
@@ -614,15 +670,37 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
 
   const unsend = useCallback(
     async (id: string) => {
-      const prev = messages;
-      setMessages((list) => removeMessage(list, id));
       const { error } = await supabase.from("messages").delete().eq("id", id);
-      if (error) {
-        setMessages(prev);
-        throw error;
-      }
+      if (error) throw error;
+      vanishMessage(id);
     },
-    [supabase, messages],
+    [supabase, vanishMessage],
+  );
+
+  const pin = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.rpc("pin_message", { p_id: id });
+      if (error) throw error;
+      // Realtime brings the new pin (and removes the oldest) for both people;
+      // add ours straight away so it feels instant.
+      setPins((list) =>
+        list.some((p) => p.message_id === id)
+          ? list
+          : [{ message_id: id, room_id: roomId, pinned_by: boot.me.id, pinned_at: new Date().toISOString() }, ...list],
+      );
+      const live = pinsRef.current.filter((p) => !p._leaving && p.message_id !== id);
+      for (const old of live.slice(2)) vanishPin(old.message_id);
+    },
+    [supabase, roomId, boot.me.id, vanishPin],
+  );
+
+  const unpin = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.rpc("unpin_message", { p_id: id });
+      if (error) throw error;
+      vanishPin(id);
+    },
+    [supabase, vanishPin],
   );
 
   const react = useCallback(
@@ -749,8 +827,14 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   }, [boot.me.id]);
 
   /** Sends a live event to the partner over the private room channel. */
+  /** Tell the partner (via presence) whether we're in the walkie room. */
+  const setWalkieOn = useCallback((on: boolean) => {
+    walkieRef.current = on;
+    void presenceChannel.current?.track({ view: tabRef.current, at: Date.now(), walkie: on });
+  }, []);
+
   const broadcast = useCallback(
-    (event: "tune" | "tune-ack" | "doodle", payload: Record<string, unknown>) => {
+    (event: "tune" | "tune-ack" | "doodle" | "walkie", payload: Record<string, unknown>) => {
       const ch = presenceChannel.current;
       if (!ch) return false;
       void ch.send({ type: "broadcast", event, payload: { ...payload, from: boot.me.id } });
@@ -862,6 +946,8 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
   const actions = useMemo(
     () => ({
       sendText,
+      pin,
+      unpin,
       sendSticker,
       sendMedia,
       sendVoice,
@@ -878,6 +964,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       markRead,
       setTyping,
       broadcast,
+      setWalkieOn,
       setMood,
       saveCountdown,
       answerSpark,
@@ -887,7 +974,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
       requestMedia,
       reload: loadAll,
     }),
-    [sendText, sendSticker, sendMedia, sendVoice, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, saveLook, markRead, setTyping, broadcast, setMood, saveCountdown, answerSpark, newGame, gameMove, saveSettings, requestMedia, loadAll],
+    [setWalkieOn, sendText, pin, unpin, sendSticker, sendMedia, sendVoice, retry, discardFailed, unsend, react, poke, createDrop, deleteDrop, moveMe, rename, saveLook, markRead, setTyping, broadcast, setMood, saveCountdown, answerSpark, newGame, gameMove, saveSettings, requestMedia, loadAll],
   );
 
   const partnerMember = members.find((m) => m.user_id === boot.partner.id);
@@ -906,6 +993,7 @@ export function useRoom(boot: Bootstrap, events: RoomEvents, currentTab: Tab) {
     connection,
     messages,
     reactions,
+    pins,
     pokes,
     drops,
     me,

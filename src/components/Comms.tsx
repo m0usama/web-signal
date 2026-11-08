@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatLastSeen, formatLeft, msLeft } from "@/lib/expiry";
 import { friendlyError, isSeenBy } from "@/lib/messages";
 import { STICKERS } from "@/lib/pixels";
-import type { Message, Profile, Reaction, SignalMode } from "@/lib/types";
+import type { Message, MessagePin, Profile, Reaction, SignalMode } from "@/lib/types";
 import type { PartnerPresence, Room } from "@/lib/useRoom";
 import { Icon } from "./Icon";
 import { TalkButton, VoiceNote } from "./Voice";
@@ -22,9 +22,12 @@ interface Props {
   onOpenGhost: (m: Message) => void;
   onToast: (text: string, tone?: "warn" | "info") => void;
   onSent: () => void;
+  walkieOn: boolean;
+  partnerOnWalkie: boolean;
+  onOpenWalkie: () => void;
 }
 
-export function Comms({ room, me, partner, presence, active, onOpenGhost, onToast, onSent }: Props) {
+export function Comms({ room, me, partner, presence, active, onOpenGhost, onToast, onSent, walkieOn, partnerOnWalkie, onOpenWalkie }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<SignalMode>("normal");
   const [ghostSeconds, setGhostSeconds] = useState(10);
@@ -35,7 +38,29 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
   const fileRef = useRef<HTMLInputElement>(null);
   const [cam, setCam] = useState(false);
   const stick = useRef(true);
-  const { messages, reactions, partnerLastReadAt, actions } = room;
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [menuFor, setMenuFor] = useState<Message | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { messages, reactions, pins, partnerLastReadAt, actions } = room;
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const pinned = new Set(pins.filter((p) => !p._leaving).map((p) => p.message_id));
+
+  const startReply = (m: Message) => {
+    setReplyTo(m);
+    setMenuFor(null);
+    setTimeout(() => inputRef.current?.focus(), 30);
+  };
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) {
+      onToast("THAT MESSAGE IS TOO OLD TO SHOW", "info");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("msg-flash");
+    void el.offsetWidth;
+    el.classList.add("msg-flash");
+  };
 
   // Keep scrolled to the bottom unless the user scrolled up.
   useLayoutEffect(() => {
@@ -60,9 +85,11 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
     const body = text.trim();
     if (!body || mode === "ghost") return;
     setText("");
+    const reply = replyTo?.id ?? null;
+    setReplyTo(null);
     actions.setTyping(false);
     try {
-      await actions.sendText(body, mode);
+      await actions.sendText(body, mode, reply);
       onSent();
     } catch (e) {
       onToast(friendlyError(e), "warn");
@@ -71,8 +98,10 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
 
   const sendSticker = async (key: string) => {
     setDrawer("none");
+    const reply = replyTo?.id ?? null;
+    setReplyTo(null);
     try {
-      await actions.sendSticker(key, mode);
+      await actions.sendSticker(key, mode, reply);
       onSent();
     } catch (e) {
       onToast(friendlyError(e), "warn");
@@ -100,7 +129,23 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
         <span className="lcd-status">
           {presence.typing ? "TYPING…" : presence.online ? "ONLINE" : `LAST SEEN ${formatLastSeen(partner.last_seen_at)}`}
         </span>
+        <button type="button" className={`walkie-btn ${walkieOn ? "on" : ""} ${partnerOnWalkie && !walkieOn ? "ringing" : ""}`} onClick={onOpenWalkie} aria-label="Open walkie-talkie">
+          📻
+        </button>
       </div>
+      {partnerOnWalkie && !walkieOn && (
+        <button type="button" className="walkie-invite" onClick={onOpenWalkie}>
+          📻 {partner.display_name} IS ON THE WALKIE — TAP TO JOIN
+        </button>
+      )}
+
+      <PinBar pins={pins} byId={byId} meId={me.id} partnerName={partner.display_name} onJump={jumpTo} onUnpin={async (id) => {
+        try {
+          await actions.unpin(id);
+        } catch (e) {
+          onToast(friendlyError(e), "warn");
+        }
+      }} />
 
       <div
         className="msg-list"
@@ -126,6 +171,12 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
               <MessageItem
                 m={m}
                 mine={m.sender_id === me.id}
+                replied={m.reply_to ? (byId.get(m.reply_to) ?? null) : undefined}
+                repliedName={m.reply_to ? (byId.get(m.reply_to)?.sender_id === me.id ? "YOU" : partner.display_name) : ""}
+                pinned={pinned.has(m.id)}
+                onReply={() => startReply(m)}
+                onMenu={() => setMenuFor(m)}
+                onJump={jumpTo}
                 reactions={reactions.filter((r) => r.message_id === m.id)}
                 myId={me.id}
                 seen={lastSeenMine?.id === m.id}
@@ -201,6 +252,18 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
       )}
 
       <div className="composer">
+        {replyTo && (
+          <div className="reply-bar" role="status">
+            <span className="reply-bar-line" aria-hidden />
+            <div className="reply-bar-text">
+              <strong>REPLYING TO {replyTo.sender_id === me.id ? "YOURSELF" : partner.display_name}</strong>
+              <span>{snippet(replyTo)}</span>
+            </div>
+            <button type="button" className="link-btn" onClick={() => setReplyTo(null)} aria-label="Cancel reply">
+              ✕
+            </button>
+          </div>
+        )}
         <div className="composer-modes">
           <button type="button" className={`mode-chip mode-${mode}`} onClick={cycleMode} aria-label="Change signal mode">
             {mode === "normal" ? "● KEEP" : mode === "day" ? "◐ 24H" : "👻 GHOST"}
@@ -254,6 +317,7 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
             onChange={(e) => onFile(e.target.files?.[0])}
           />
           <textarea
+            ref={inputRef}
             className="composer-input"
             rows={1}
             value={text}
@@ -310,6 +374,59 @@ export function Comms({ room, me, partner, presence, active, onOpenGhost, onToas
         />
       )}
 
+      {menuFor && (
+        <MessageMenu
+          m={menuFor}
+          mine={menuFor.sender_id === me.id}
+          pinned={pinned.has(menuFor.id)}
+          myReaction={reactions.find((x) => x.message_id === menuFor.id && x.user_id === me.id)?.emoji ?? null}
+          onClose={() => setMenuFor(null)}
+          onReact={async (emoji) => {
+            const id = menuFor.id;
+            setMenuFor(null);
+            try {
+              await actions.react(id, emoji);
+            } catch (e) {
+              onToast(friendlyError(e), "warn");
+            }
+          }}
+          onReply={() => startReply(menuFor)}
+          onCopy={async () => {
+            const body = menuFor.body ?? "";
+            setMenuFor(null);
+            try {
+              await navigator.clipboard.writeText(body);
+              onToast("COPIED", "info");
+            } catch {
+              onToast("COULDN'T COPY ON THIS PHONE", "warn");
+            }
+          }}
+          onPin={async () => {
+            const m = menuFor;
+            setMenuFor(null);
+            try {
+              if (pinned.has(m.id)) await actions.unpin(m.id);
+              else {
+                await actions.pin(m.id);
+                onToast(pins.filter((p) => !p._leaving).length >= 3 ? "PINNED · OLDEST PIN REMOVED" : "PINNED FOR YOU BOTH", "info");
+              }
+            } catch (e) {
+              onToast(friendlyError(e), "warn");
+            }
+          }}
+          onDelete={async () => {
+            const id = menuFor.id;
+            setMenuFor(null);
+            if (replyTo?.id === id) setReplyTo(null);
+            try {
+              await actions.unsend(id);
+            } catch (e) {
+              onToast(friendlyError(e), "warn");
+            }
+          }}
+        />
+      )}
+
       {lightbox && (
         <div className="lightbox" role="dialog" aria-label="Photo" onClick={() => setLightbox(null)}>
           <img src={lightbox} alt="" onContextMenu={(e) => e.preventDefault()} draggable={false} />
@@ -329,9 +446,138 @@ function dayLabel(iso: string) {
   return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
 }
 
+/** Short text describing a message, for reply quotes and pins. */
+function snippet(m: Message): string {
+  if (m.mode === "ghost") return "👻 GHOST " + (m.kind === "voice" ? "VOICE" : "PHOTO");
+  if (m.kind === "text") return (m.body ?? "").slice(0, 80);
+  if (m.kind === "sticker") return "★ STICKER";
+  if (m.kind === "voice") return "🎙 VOICE NOTE";
+  if (m.kind === "gif") return "GIF";
+  return "📷 PHOTO";
+}
+
+function PinBar({
+  pins,
+  byId,
+  meId,
+  partnerName,
+  onJump,
+  onUnpin,
+}: {
+  pins: MessagePin[];
+  byId: Map<string, Message>;
+  meId: string;
+  partnerName: string;
+  onJump: (id: string) => void;
+  onUnpin: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (pins.length === 0) return null;
+  const live = pins.filter((p) => !p._leaving);
+  // Collapsed: the newest pin plus anything that is animating away.
+  const shown = open ? pins.slice(0, 4) : pins.filter((p, i) => p._leaving || p.message_id === live[0]?.message_id || (live.length === 0 && i === 0));
+  return (
+    <div className={`pin-bar ${open ? "open" : ""}`} aria-label="Pinned messages">
+      {shown.map((p) => {
+        const m = byId.get(p.message_id);
+        const isTop = p.message_id === live[0]?.message_id;
+        return (
+          <div key={p.message_id} className={`pin-chip ${p._leaving ? "pin-leaving" : ""}`}>
+            <button type="button" className="pin-chip-main" onClick={() => onJump(p.message_id)}>
+              <span className="pin-ico" aria-hidden>
+                📌
+              </span>
+              <span className="pin-who">{m ? (m.sender_id === meId ? "YOU" : partnerName) : "PINNED"}</span>
+              <span className="pin-text">{m ? snippet(m) : "OLDER MESSAGE"}</span>
+            </button>
+            {isTop && live.length > 1 && (
+              <button type="button" className="pin-more" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Show fewer pins" : "Show all pins"}>
+                {open ? "▴" : `+${live.length - 1}`}
+              </button>
+            )}
+            <button type="button" className="pin-x" onClick={() => onUnpin(p.message_id)} aria-label="Unpin">
+              ✕
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MessageMenu({
+  m,
+  mine,
+  pinned,
+  myReaction,
+  onClose,
+  onReact,
+  onReply,
+  onCopy,
+  onPin,
+  onDelete,
+}: {
+  m: Message;
+  mine: boolean;
+  pinned: boolean;
+  myReaction: string | null;
+  onClose: () => void;
+  onReact: (emoji: string | null) => void;
+  onReply: () => void;
+  onCopy: () => void;
+  onPin: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="msg-menu-backdrop" onClick={onClose} role="presentation">
+      <div className="msg-menu" role="menu" aria-label="Message options" onClick={(e) => e.stopPropagation()}>
+        <p className="msg-menu-quote">{snippet(m)}</p>
+        <div className="msg-menu-react">
+          {REACTIONS.map((e) => (
+            <button key={e} type="button" className={e === myReaction ? "on" : ""} onClick={() => onReact(e === myReaction ? null : e)}>
+              {e}
+            </button>
+          ))}
+        </div>
+        <button type="button" role="menuitem" className="msg-menu-item" onClick={onReply}>
+          <span aria-hidden>↩</span> REPLY
+        </button>
+        {m.kind === "text" && (
+          <button type="button" role="menuitem" className="msg-menu-item" onClick={onCopy}>
+            <span aria-hidden>⧉</span> COPY
+          </button>
+        )}
+        {m.mode !== "ghost" && (
+          <button type="button" role="menuitem" className="msg-menu-item" onClick={onPin}>
+            <span aria-hidden>📌</span> {pinned ? "UNPIN" : "PIN FOR BOTH"}
+          </button>
+        )}
+        {mine && (
+          <button type="button" role="menuitem" className="msg-menu-item danger" onClick={onDelete}>
+            <span aria-hidden>🗑</span> DELETE FOR BOTH
+          </button>
+        )}
+        <button type="button" className="msg-menu-item cancel" onClick={onClose}>
+          CANCEL
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const LONG_PRESS_MS = 420;
+const SWIPE_REPLY_PX = 56;
+
 const MessageItem = memo(function MessageItem(props: {
   m: Message;
   mine: boolean;
+  /** undefined = not a reply; null = replied-to message no longer loaded. */
+  replied?: Message | null;
+  repliedName: string;
+  pinned: boolean;
+  onReply: () => void;
+  onMenu: () => void;
+  onJump: (id: string) => void;
   reactions: Reaction[];
   myId: string;
   seen: boolean;
@@ -350,10 +596,85 @@ const MessageItem = memo(function MessageItem(props: {
   const myReaction = props.reactions.find((r) => r.user_id === props.myId)?.emoji ?? null;
   const left = msLeft(m);
   const time = new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const rowRef = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ x: number; y: number; id: number; dx: number; horiz: boolean | null; timer: ReturnType<typeof setTimeout> | null; long: boolean } | null>(null);
+  const live = !m._status && !m._leaving;
+
+  const setShift = (dx: number, animate: boolean) => {
+    const row = rowRef.current;
+    if (!row) return;
+    row.style.transition = animate ? "transform 220ms cubic-bezier(0.3, 1.4, 0.5, 1)" : "none";
+    row.style.transform = dx ? `translateX(${dx}px)` : "";
+    row.style.setProperty("--swipe", String(Math.min(1, dx / SWIPE_REPLY_PX)));
+  };
+  const endGesture = () => {
+    const g = gesture.current;
+    if (!g) return;
+    if (g.timer) clearTimeout(g.timer);
+    if (g.horiz && g.dx >= SWIPE_REPLY_PX) {
+      props.onReply();
+      navigator.vibrate?.(10);
+    }
+    setShift(0, true);
+    gesture.current = null;
+  };
 
   return (
-    <div className={`msg ${mine ? "me" : "them"} kind-${m.kind} mode-${m.mode} ${m._status ? `st-${m._status}` : ""}`}>
-      <div className="bubble" onDoubleClick={() => !m._status && props.onReact(myReaction ? null : "💜")}>
+    <div
+      id={`msg-${m.id}`}
+      ref={rowRef}
+      className={`msg ${mine ? "me" : "them"} kind-${m.kind} mode-${m.mode} ${m._status ? `st-${m._status}` : ""} ${m._leaving ? "msg-leaving" : ""} ${props.pinned ? "is-pinned" : ""}`}
+      onPointerDown={(e) => {
+        if (!live || (e.pointerType === "mouse" && e.button !== 0)) return;
+        if ((e.target as HTMLElement).closest("button, audio, input, a")) return;
+        const g = { x: e.clientX, y: e.clientY, id: e.pointerId, dx: 0, horiz: null as boolean | null, timer: null as ReturnType<typeof setTimeout> | null, long: false };
+        g.timer = setTimeout(() => {
+          g.long = true;
+          gesture.current = null;
+          setShift(0, true);
+          navigator.vibrate?.(15);
+          props.onMenu();
+        }, LONG_PRESS_MS);
+        gesture.current = g;
+      }}
+      onPointerMove={(e) => {
+        const g = gesture.current;
+        if (!g || g.id !== e.pointerId) return;
+        const dx = e.clientX - g.x;
+        const dy = e.clientY - g.y;
+        if (g.horiz === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+          g.horiz = Math.abs(dx) > Math.abs(dy) && dx > 0;
+          if (g.timer) clearTimeout(g.timer);
+          g.timer = null;
+          if (!g.horiz) {
+            gesture.current = null;
+            return;
+          }
+        }
+        if (g.horiz) {
+          g.dx = Math.max(0, Math.min(84, dx));
+          setShift(g.dx, false);
+        }
+      }}
+      onPointerUp={endGesture}
+      onPointerCancel={endGesture}
+      onContextMenu={(e) => {
+        if (live) {
+          e.preventDefault();
+          props.onMenu();
+        }
+      }}
+    >
+      <span className="swipe-reply" aria-hidden>
+        ↩
+      </span>
+      {props.replied !== undefined && (
+        <button type="button" className="reply-quote" onClick={() => m.reply_to && props.onJump(m.reply_to)}>
+          <strong>{props.replied ? props.repliedName : "REPLY"}</strong>
+          <span>{props.replied ? snippet(props.replied) : "Message no longer here"}</span>
+        </button>
+      )}
+      <div className="bubble" onDoubleClick={() => live && props.onReact(myReaction ? null : "💜")}>
         {m.kind === "text" && <p className="msg-text">{m.body}</p>}
         {m.kind === "sticker" && m.sticker && (
           <span className="msg-sticker">
@@ -372,6 +693,7 @@ const MessageItem = memo(function MessageItem(props: {
       </div>
 
       <div className="msg-meta">
+        {props.pinned && <span className="tag tag-pin">📌</span>}
         <span>{time}</span>
         {m.mode === "day" && left !== null && <span className="tag tag-day">◐ {formatLeft(left)}</span>}
         {m._status === "sending" && <span className="tag">SENDING…</span>}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { H, HAND, W, type HeroLook } from "@/lib/hero";
+import { H, HAND, TOP, W, type HeroLook } from "@/lib/hero";
 import { HeroSprite } from "./HeroSprite";
 import { HERO_DEMO_EVENT, useIdleMs } from "@/lib/idlePref";
 
@@ -228,7 +228,7 @@ export function IdleHero({ look, reduced, paused }: { look: HeroLook; reduced: b
   // Shift the sprite so the raised hand sits exactly on the end of the line.
   const width = (SIZE * W) / H;
   const dx = -(HAND.x / W) * width;
-  const dy = -(HAND.y / H) * SIZE;
+  const dy = -((HAND.y - TOP) / H) * SIZE;
   const s = STUNTS[stunt];
   const showFx = phase === "show" && !reduced;
   return (
